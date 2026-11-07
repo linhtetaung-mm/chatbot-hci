@@ -1,16 +1,24 @@
 # Reassure and Guide — Phase 1 chatbot
 
-Two distinct chatbot styles with separate persistent memory for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local mode uses Python 3.10+ and the standard library. Render uses Gunicorn (included in requirements.txt).
+Two distinct chatbot styles. The current default is a temporary team preview; optional persistent mode keeps separate memories for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local mode uses Python 3.10+ and the standard library. Render uses Gunicorn (included in requirements.txt).
 
 **Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).
 
-**Hosting update — 7 November 2026:** Render configuration, private access and persistent quotas are implemented and locally tested. See [deployment verification](VERIFICATION.md). A Render deployment and live hosted acceptance test remain to be done.
+**Hosting update — 7 November 2026:** Free temporary Render configuration, private access and process-local quotas are implemented and locally tested. Optional persistent mode is retained. See [deployment verification](VERIFICATION.md). A Render deployment and live hosted acceptance test remain to be done.
 
 ## Deploy for team testing on Render
 
-Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The included `render.yaml` sets up a paid service with a persistent disk and private environment settings. Setup mode is the initial default; enable live mode after completing the documented checks. No API key or existing tester data is included in deployment files.
+Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The included `render.yaml` sets up a free, temporary team preview with private environment settings and no disk. Setup mode is the initial default; enable live mode after completing the documented checks. No API key or existing tester data is included in deployment files.
 
-Hosting includes secure HTTPS cookies, exact host/origin checks, persistent API-attempt quotas, an admin pause/resume switch, and remote chatbot assignment. Each tester needs a private access code. Limits include memory summaries and failed attempts, across both styles. This is preparation for team testing, not completion of the four-condition experiment or approval for participant recruitment.
+Hosting includes secure HTTPS cookies, exact host/origin checks, API-attempt quotas, an admin pause/resume switch, and remote chatbot assignment. Each tester needs a private access code. In temporary mode, quotas last only for the running process, and no memory summaries are generated. In persistent mode, limits include memory summaries and failed attempts across both styles. This is preparation for team testing, not completion of the four-condition experiment or approval for participant recruitment.
+
+## Current default: temporary team preview
+
+`STORAGE_MODE=temporary` is now the default. The storage interface uses an in-memory implementation: no chat database is written to disk. It keeps context within the current chat and clears the chat on Finish, Stop, sign-out or process restart. Closing a browser tab alone does not clear server RAM. Saved notes and record downloads are disabled. Researchers can inspect active chats; live messages still go to OpenAI.
+
+Tester codes, sessions, quotas and pause state exist only in server RAM and reset on restart/sleep. Use this for a short team demo, with fictional mild topics. Set provider spending controls separately. Existing on-disk records are left untouched and are not loaded by this mode.
+
+The persistent implementation remains available through explicit `STORAGE_MODE=persistent`; its paid Render example is `render.persistent.yaml`. Future database selection and migration are separate decisions. See [the architecture note](docs/TEMPORARY_STORAGE.md).
 
 ## Start without an API key
 

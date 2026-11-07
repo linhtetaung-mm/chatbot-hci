@@ -1,7 +1,7 @@
 """Conversation lifecycle, authorization and isolated memory."""
 import hashlib,json,secrets,threading,time,re,sqlite3
 from pathlib import Path
-from .storage import Storage
+from .storage import Storage,MemoryStorage
 from .limits import UsageLimits
 from .provider import Provider,ProviderError,validate_notes,SAFETY_RESPONSE
 PROMPTS=json.loads(Path(__file__).with_name('prompts.json').read_text())
@@ -13,7 +13,9 @@ class Error(Exception):
     def __init__(self,message,status=400):self.message=message;self.status=status
 class Chatbot:
     def __init__(self,cfg,provider=None):
-        self.cfg=cfg;self.storage=Storage(cfg['db'],cfg['mode'],cfg['model']);self.provider=provider or Provider(cfg)
+        self.cfg=cfg;self.temporary=cfg.get('storage_mode')=='temporary'
+        self.storage=MemoryStorage(cfg['mode'],cfg['model']) if self.temporary else Storage(cfg['db'],cfg['mode'],cfg['model'])
+        self.provider=provider or Provider(cfg)
         self.locks={};self.guard=threading.Lock();self.usage=UsageLimits(self.storage,cfg)
     def lock(self,key):
         with self.guard:return self.locks.setdefault(key,threading.Lock())
@@ -51,7 +53,13 @@ class Chatbot:
             if not row or (role and row['role']!=role):raise Error('Please sign in.',401)
             return dict(row)
     def logout(self,token):
-        with self.storage.connect() as db:db.execute('DELETE FROM logins WHERE hash=?',(digest(token),))
+        with self.storage.connect() as db:
+            auth=db.execute('SELECT tester_id FROM logins WHERE hash=?',(digest(token),)).fetchone()
+            db.execute('DELETE FROM logins WHERE hash=?',(digest(token),))
+            if self.temporary and auth and auth['tester_id']:
+                db.execute('DELETE FROM conversations WHERE tester_id=?',(auth['tester_id'],))
+                db.execute('DELETE FROM events WHERE tester_id=?',(auth['tester_id'],))
+                db.execute('UPDATE testers SET consent=NULL WHERE id=?',(auth['tester_id'],))
     def tester(self,db,auth,allow_suspended=False):
         t=db.execute('SELECT * FROM testers WHERE id=?',(auth['tester_id'],)).fetchone()
         if not t:raise Error('This tester record no longer exists.',410)
@@ -67,6 +75,7 @@ class Chatbot:
         with self.storage.connect() as db:
             t=self.tester(db,auth);db.execute('UPDATE testers SET consent=COALESCE(consent,?) WHERE id=?',(time.time(),t['id']));self.event(db,t['id'],None,'consent')
     def selected_notes(self,db,c):
+        if self.temporary:return []
         notes=[]
         for ref in json.loads(c['memory_refs']):
             row=db.execute("SELECT m.*,c.ended FROM memories m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=? AND c.tester_id=? AND c.style=? AND c.status='completed' AND m.status='ready'",(ref,c['tester_id'],c['style'])).fetchone()
@@ -84,8 +93,13 @@ class Chatbot:
                 # Serialize quota check and creation, across both support styles.
                 db.execute('BEGIN IMMEDIATE')
                 day=int(time.time()//86400)*86400
-                created=db.execute('SELECT count(*) FROM conversations WHERE tester_id=? AND started>=?',(t['id'],day)).fetchone()[0]
+                counter_key='temporary_chat_count:'+digest(t['id'])+':'+str(day)
+                if self.temporary:
+                    counter=db.execute('SELECT value FROM settings WHERE key=?',(counter_key,)).fetchone()
+                    created=int(counter[0]) if counter else 0
+                else:created=db.execute('SELECT count(*) FROM conversations WHERE tester_id=? AND started>=?',(t['id'],day)).fetchone()[0]
                 if created>=self.cfg.get('limits',{}).get('TESTER_DAILY_CHAT_LIMIT',4):raise Error('Daily new-chat limit reached. Return after midnight UTC or contact the researcher.',429)
+                if self.temporary:db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)',(counter_key,str(created+1)))
                 refs=[r['id'] for r in reversed(rows)];cid=uid('C');prompt_json=json.dumps(PROMPTS,sort_keys=True)
                 db.execute('INSERT INTO conversations VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,t['id'],auth['style'],'open',time.time(),None,self.cfg['model'],digest(prompt_json),prompt_json,json.dumps(refs)))
                 db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,model) VALUES(?,?,?,?,?,?,?,?)',(cid,0,'assistant',GREETING,'success','opening',time.time(),'FIXED_GREETING'))
@@ -94,7 +108,7 @@ class Chatbot:
         with self.storage.connect() as db:
             t=self.tester(db,auth,True)
             result={'tester_id':t['id'],'bot_label':auth['style'].title(),'bot_name':auth['style'].title(),'style':auth['style'],'consented':bool(t['consent']),'suspended':bool(t['suspended']),
-              'mode':self.cfg['mode'],'api_ready_for_requests':self.cfg['mode']=='live','contact':self.cfg['contact'],'support':self.cfg['support'],'delete_date':self.cfg['delete_date'],
+              'storage_mode':self.cfg.get('storage_mode','persistent'),'mode':self.cfg['mode'],'api_ready_for_requests':self.cfg['mode']=='live','contact':self.cfg['contact'],'support':self.cfg['support'],'delete_date':self.cfg['delete_date'],
               'conversations':[dict(r) for r in db.execute('SELECT c.id,c.status,c.started,c.ended,m.status AS memory_status FROM conversations c LEFT JOIN memories m ON c.id=m.conversation_id WHERE tester_id=? AND style=? ORDER BY c.started DESC',(t['id'],auth['style']))]}
             if cid:
                 c=self.conversation(db,auth,cid,True);messages=[dict(r) for r in db.execute('SELECT seq,role,text,status,request_id,model FROM messages WHERE conversation_id=? ORDER BY seq',(cid,))]
@@ -164,9 +178,13 @@ class Chatbot:
                 db.execute("UPDATE conversations SET status='completed',ended=? WHERE id=?",(time.time(),cid))
                 db.execute('INSERT OR IGNORE INTO memories VALUES(?,?,?,?,?,?,?,?,?)',(uid('M'),cid,'pending',None,'1',self.cfg['model'],c['prompt_version'],time.time(),None))
                 self.event(db,c['tester_id'],cid,'conversation_finished')
+                if self.temporary:
+                    db.execute('DELETE FROM conversations WHERE id=?',(cid,))
+                    return {'ok':True,'memory_status':'disabled'}
         finally:mutex.release()
         return self.summarize(cid)
     def summarize(self,cid):
+        if self.temporary:raise Error('Saved memory is disabled for temporary team testing.',409)
         mutex=self.lock('summary:'+cid)
         if not mutex.acquire(False):raise Error('Memory generation is already in progress.',409)
         try:
@@ -190,6 +208,8 @@ class Chatbot:
     def stop(self,auth,cid,discard=False):
         with self.storage.connect() as db:
             c=self.conversation(db,auth,cid,True)
+            if self.temporary:
+                db.execute('DELETE FROM conversations WHERE id=?',(cid,));return {'ok':True}
             if c['status']=='open':
                 db.execute('UPDATE conversations SET status=?,ended=? WHERE id=?',('discarded' if discard else 'stopped',time.time(),cid));self.event(db,c['tester_id'],cid,'discarded' if discard else 'manual_stop')
         return {'ok':True}
@@ -237,7 +257,7 @@ class Chatbot:
         return {'ok':True}
     def admin_state(self):
         with self.storage.connect() as db:
-            return {'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'usage':self.usage.state(),'testers':[dict(r) for r in db.execute('SELECT id,created,consent,active_style,suspended FROM testers ORDER BY created')],
+            return {'storage_mode':self.cfg.get('storage_mode','persistent'),'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'usage':self.usage.state(),'testers':[dict(r) for r in db.execute('SELECT id,created,consent,active_style,suspended FROM testers ORDER BY created')],
               'conversations':[dict(r) for r in db.execute('SELECT c.id,c.tester_id,c.style,c.status,c.started,c.prompt_version,m.status AS memory_status FROM conversations c LEFT JOIN memories m ON m.conversation_id=c.id ORDER BY c.started DESC')]}
     def inspect(self,cid):
         with self.storage.connect() as db:
@@ -245,5 +265,6 @@ class Chatbot:
             if not c:raise Error('Unknown conversation.',404)
             return {'conversation':dict(c),'messages':[dict(r) for r in db.execute('SELECT * FROM messages WHERE conversation_id=? ORDER BY seq',(cid,))], 'memory':dict(r) if (r:=db.execute('SELECT * FROM memories WHERE conversation_id=?',(cid,)).fetchone()) else None}
     def export(self):
+        if self.temporary:raise Error('Record downloads are disabled for temporary team testing.',403)
         with self.storage.connect() as db:
             return {'mode':self.cfg['mode'],'exported_at':time.time(),'testers':[dict(r) for r in db.execute('SELECT id,created,consent,active_style,suspended FROM testers')],**{table:[dict(r) for r in db.execute('SELECT * FROM '+table)] for table in ['conversations','messages','memories','events']}}

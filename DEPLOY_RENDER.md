@@ -1,174 +1,104 @@
-# Deploy Reassure and Guide for private team testing
+# Free team preview on Render
 
-Updated 7 November 2026. This guide is for the `phase1-chatbots` repository, not the older `study-kit` app.
+This version lets teammates try Reassure and Guide now and decide on the database later. No disk, external database account or database subscription is required. Live OpenAI API usage is still charged separately.
 
-## What is included
+## What this preview does
 
-Two styles with separate memories for each tester/style; saved notes from up to three finished chats; private tester codes; researcher-only inspection and exports; HTTPS sessions; persistent request limits; pause/resume; and remote style assignment. The key stays on the server.
+- Two distinct chatbot styles, labeled at the top.
+- Context within the current conversation.
+- Private access codes and a server-side API key.
+- No chat database written to disk and no saved notes between chats.
+- Finish, Stop, discard or sign-out clears the current tester's relevant chat content. Closing a tab alone does not clear it.
+- Researchers can inspect active chats in RAM, but record exports/backups are disabled.
+- Server restart/sleep clears everything in RAM, including codes, chats, consent confirmations, quotas and the admin pause switch. Admin credentials/API keys remain in Render Environment settings.
 
-This release prepares the existing chatbot for **team testing**. It does not add the Fresh memory condition, random assignment, Google Forms/Sheets integration, or the complete longitudinal experiment. Do not describe deployment as completing the study or obtaining review approval.
+OpenAI still processes live chat text. This is not a claim of zero retention by OpenAI or Render, and service/network metadata may exist outside this app. Use fictional mild topics for the preview.
 
-## 1. Upload the updated source
+## 1. Push the updated project
 
-Use the Git repository inside `phase1-chatbots`, connected to `chatbot-hci`. Review and commit the updated files in GitHub Desktop, then push them. Do not upload the parent HCI project or old study-kit. No push has been performed by this update.
+In GitHub Desktop, select the repository **inside `phase1-chatbots`**, review the changes, commit and push. Your repository root should contain `app/`, `render.yaml`, `gunicorn.conf.py` and `requirements.txt`.
 
-The repository root should contain:
+Never upload `.env`, `.venv`, `data`, private exports or existing databases. The refreshed ZIP excludes these files. This update did not push to GitHub or create a Render service.
 
-```text
-app/
-tests/
-tools/
-requirements.txt
-render.yaml
-gunicorn.conf.py
-DEPLOY_RENDER.md
-README.md
-```
+## 2. Create the free service
 
-Never commit `.env`, `.venv`, `data`, exported records, database files, or private backups. `.gitignore` already excludes them. Existing local chats will not automatically appear on Render; deployment starts a new database.
+1. Sign in to Render and connect GitHub.
+2. Choose **New → Blueprint**, then select your chatbot repository and updated branch.
+3. Keep the Blueprint file path **`render.yaml`**. It now specifies the **Free** plan, `STORAGE_MODE=temporary`, and no disk.
+4. Enter your API key privately for `OPENAI_API_KEY`, and a reachable team contact for `RESEARCHER_CONTACT`.
+5. Confirm the preview shows no paid disk or paid service, then create it.
+6. Wait for deployment. Copy its public HTTPS URL.
+7. Find the generated `ADMIN_KEY` in Render → service → Environment. Keep it private; this is your researcher password.
 
-## 2. Create the Render service
+If a paid service was already created using the earlier configuration, do not assume that uploading the new Blueprint removes its disk or billing. For this preview, create a separate free service and check the old service's resources/billing separately. Preserve any authorized existing records before removing anything.
 
-Use a **paid web service with a persistent disk**. This design stores SQLite on disk. Free services cannot attach persistent disks, and ordinary service files are lost on restart/redeploy. See [Render persistent disks](https://render.com/docs/disks). Check the current service and disk charges in Render before creating them.
-
-### Recommended: Blueprint
-
-1. Sign in to Render and connect your GitHub account.
-2. Choose **New → Blueprint** and select `chatbot-hci`.
-3. Select the branch containing the updated files. Keep the Blueprint path `render.yaml` if it is at the repository root.
-4. Review the proposed paid Starter service, Singapore region and 1 GB disk.
-5. For `OPENAI_API_KEY`, enter your API key privately in Render. For `RESEARCHER_CONTACT`, enter the team contact testers can reach. Never place the key in the YAML or chat.
-6. Create the resources. Wait until the service reports that deployment succeeded.
-7. Copy the public HTTPS URL. It will look like `https://your-service.onrender.com`.
-
-The Blueprint starts in **setup** mode, so it makes no AI calls. Render generates `ADMIN_KEY`; copy that value from the service's Environment settings into your password manager. It is the researcher login secret. Share tester codes, not this secret.
-
-The app automatically uses `RENDER_EXTERNAL_HOSTNAME` for its public origin. Do not add a guessed URL. If using a custom domain later, set `PUBLIC_ORIGIN` to its exact HTTPS origin, without a path. Only that configured host is accepted.
-
-### Alternative: manual Web Service
-
-If you prefer **New → Web Service**, use these settings:
+If creating a Web Service manually instead, use:
 
 | Setting | Value |
 |---|---|
-| Runtime | Python |
-| Root Directory | Blank if `app/` is at repository root |
-| Build command | `pip install -r requirements.txt` |
-| Start command | `gunicorn -c gunicorn.conf.py app.server:application` |
+| Plan | Free |
+| Root directory | Blank when `app/` is at repository root |
+| Build | `pip install -r requirements.txt` |
+| Start | `gunicorn -c gunicorn.conf.py app.server:application` |
 | Health check | `/health` |
-| Instances | 1 |
-| Plan | Paid plan supporting a persistent disk |
-| Disk mount | `/var/data` |
-| Disk size | 1 GB |
+| Disk | None |
 
-Add the variables from `render.yaml` manually. Generate an `ADMIN_KEY` of at least 24 random characters, preferably using a password manager. Use Python `3.12.8` as specified in the Blueprint. Do not set `PORT`; Render provides it. The startup command binds to Render's port on all interfaces.
+Copy the variables from `render.yaml`, generating your own private random `ADMIN_KEY` of at least 24 characters. Use one instance and one Gunicorn worker. Render supplies the port and hostname. Do not set `PUBLIC_ORIGIN` unless you need an exact custom HTTPS origin.
 
-If your GitHub repository contains the `phase1-chatbots` folder inside another folder, set Root Directory to its actual relative path. For a Blueprint, add the corresponding `rootDir` field and select the correct Blueprint file path. Do not move unrelated project documents into the deployment repository.
+## 3. Check the interface first
 
-## 3. Check setup mode before enabling AI
+The Blueprint starts in **setup** mode, which sends no AI requests.
 
-1. Open `https://YOUR-SERVICE/health`. Expect `{"ok": true, "mode": "setup"}`.
-2. Open `https://YOUR-SERVICE/admin` and sign in with the generated `ADMIN_KEY`.
-3. Create a tester and save its one-time code privately. Codes cannot be recovered later.
-4. Under **AI usage and access**, assign that tester to Reassure or Guide. This does not sign you out.
-5. Open the main URL in an incognito window or a separate browser. Sign in using that tester's code.
-6. Check the style name at the top, consent information, researcher contact and deletion date. Sending is disabled in setup mode.
+1. Open `https://YOUR-APP/health`; expect `ok: true` and `mode: setup`.
+2. Open `/admin` and sign in with `ADMIN_KEY`.
+3. Create one tester code per teammate. Privately send each person their code and the main URL.
+4. Use **AI usage and access → Assign a chatbot remotely** to choose Reassure or Guide for each tester.
+5. Have testers sign in at the main URL. Confirm the style and temporary-preview notice appear.
 
-Each teammate should have their own code. Anyone holding a code can use that tester's records, so send it privately. There is no public registration. The site/login page is publicly reachable, but chats and records require authentication. The `/admin` page requires the researcher secret; knowing its URL is not sufficient.
+Tester codes are shown only once. They disappear on server restart; recreate and reissue them when needed. Keep admin access to designated researchers. Assignment revokes older tester sessions; the teammate signs back in with their code. Do not use **Open tester screen** unless you intend to switch your own browser into the tester session.
 
-For testing both styles, assign the same tester to the other style and have them sign out/sign back in. Assignment revokes earlier tester sessions. Reassure and Guide retain separate histories. Use the **Open tester screen** form only when deliberately taking over the tester browser yourself; it switches your session away from admin.
+## 4. Enable real responses
 
-## 4. Enable live AI deliberately
+In Render Environment:
 
-In Render → service → Environment, set:
+```text
+STORAGE_MODE=temporary
+CHATBOT_MODE=live
+OPENAI_API_KEY=<enter privately in Render>
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
+RESEARCHER_CONTACT=<your reachable contact>
+```
 
-| Variable | Value/action |
-|---|---|
-| `CHATBOT_MODE` | `live` |
-| `CHATBOT_DB` | `/var/data/chatbots-live.sqlite3` |
-| `OPENAI_API_KEY` | Real API-project key, kept private |
-| `OPENAI_MODEL` | A model you have verified your API project can use; default `gpt-6-luna` |
-| `OPENAI_REASONING_EFFORT` | Default `none`; remove/blank for a model that does not support this setting |
-| `RESEARCHER_CONTACT` | A reachable team contact |
-| `SUPPORT_CONTACTS` | Locally verified support information appropriate to your procedure |
-| `DELETE_DATE` | The team's actual storage deletion date |
-| `HUMAN_TEST_REVIEW` | `confirmed` only once the applicable course/review requirements for this testing are met |
+Use a model your API project can access; blank the reasoning setting if that model does not support it. Preserve the existing review gate: set `HUMAN_TEST_REVIEW=confirmed` only after the applicable course/review requirements for this testing have been met. Proposal feedback alone does not establish approval of the participant procedure. Until then, interface checks are available in setup mode and fictional scripted checks in demo mode.
 
-Save and redeploy. Instructor proposal feedback alone does not establish procedure/consent approval. If that review is still pending, remain in setup mode for interface checks or demo mode for clearly labeled fictional simulations (`CHATBOT_DB=/var/data/chatbots-demo.sqlite3`). Do not mark the review confirmed just to bypass startup validation.
+Save/redeploy. Recreate tester codes afterward because RAM is reset. The `/health` response confirms the mode but does not prove API access. Test one fictional mild-topic message to verify a real reply. The API key stays in Render; never send it to teammates.
 
-The live database must be different from the setup/demo database. Mode/model are recorded in each database; changing either requires a new filename to preserve provenance. Setup-mode invitations do not carry over into a new database: create fresh tester codes after switching. ChatGPT Plus does not fund API calls; check your API billing separately.
+**Do not set up `CHATBOT_DB` or attach a disk for this preview.** It is ignored in temporary mode.
 
-Open `/health` again and check that the mode is live. This health check does **not** call OpenAI or prove the key works. Send one fictional mild-topic message as a tester to verify actual API access.
+## 5. Run the short team test
 
-## 5. Usage limits and cost control
+1. Open the app shortly before the agreed test time, sign in as researcher, and create fresh codes if it has restarted.
+2. Have teammates try the same mild fictional situation in both styles. Reassign the style and ask them to sign in again to switch.
+3. Ask for feedback on relevance, tone, repetition, how naturally the bot continues, and interface clarity.
+4. Verify Finish/Stop clears the conversation, and that a new chat does not use previous-chat information.
+5. Note feedback manually without copying sensitive chat text. These are team trials, not participant results or a test of persistent memory.
+6. Pause AI requests in admin when the session ends. Already running requests can finish. Because a restart resets pause, disable live mode or remove the API key in Environment if access must remain off after a restart.
 
-The default settings are intentionally conservative for the five-person team:
+## Usage and free-tier limitations
 
-| Environment variable | Default | Scope |
-|---|---:|---|
-| `TESTER_DAILY_API_LIMIT` | 50 | Attempts per tester across both styles per UTC day |
-| `GLOBAL_DAILY_API_LIMIT` | 250 | Attempts for the whole app per UTC day |
-| `GLOBAL_TOTAL_API_LIMIT` | 500 | Attempts for this database across all days |
-| `TESTER_MINUTE_API_LIMIT` | 3 | Attempts per tester in a rolling minute |
-| `GLOBAL_CONCURRENT_API_LIMIT` | 5 | Simultaneous calls across the app |
-| `TESTER_DAILY_CHAT_LIMIT` | 4 | New chats per tester across both styles per UTC day |
+Default caps: 50 attempts per tester/day, 250 app-wide/day, 500 total **per running process**, three attempts per tester/minute, five concurrent app calls and four new chats per tester/day. Replies and retries count. Temporary mode generates no summary calls.
 
-Each reply, memory summary, summary retry and failed API attempt consumes one attempt reservation. Blocked requests consume none. The existing 20-user-message cap remains per conversation. Demo operations also consume local reservations, but never incur API charges. An ordinary completed chat with ten AI replies and one summary uses eleven attempts. Finishing a chat immediately after three quick requests may delay its summary; the researcher can retry it after the minute window.
+These controls exist in RAM: restarting resets them, so they cannot enforce a lasting spending ceiling. Configure API-provider spending controls separately. Do not distribute the API key. Quotas cannot control use of that key outside this app.
 
-Counters persist across app restarts/redeploys. Deleting tester records does not reset the app's total counter; only a content-free tester-ID hash, operation kind and attempt timestamps/status remain in this quota ledger. The hash is pseudonymous metadata, not a promise of anonymity. Retain/delete the database and its backups according to your actual retention policy. Do not switch database paths merely to bypass a budget cap. Adjust a limit deliberately in Environment and redeploy after checking spending. A new model/database intentionally starts its own counters.
+Render Free may sleep after 15 minutes without traffic; startup can be slow. Treat sleep/restart/redeploy as losing the preview's temporary state and codes. No always-on availability is promised. See [Render free-service limits](https://render.com/docs/free).
 
-The admin **AI usage and access** section shows total and today's attempts and has **Pause AI requests**. Pause blocks new replies, summaries and retries; already running calls may complete and incur cost. Stop, logout, inspection and deletion remain available. Resume when ready. The pause state persists in the database.
+## Local preview
 
-These are **request caps, not a guaranteed dollar cap**. Input size varies with history and saved notes. Chat responses are capped at 250 output tokens and summary responses at 700. The app also caps message size and total assembled chat context. Set the API project's own spending controls and alerts, and watch actual API costs. Using the same key outside this app bypasses its caps. Render hosting charges are separate.
+Add `STORAGE_MODE=temporary` to your private `.env`, keeping your other private settings. Then start with `python3 run.py`. Stop an older running instance first; it will not adopt new settings until restarted. Existing local databases are not deleted or loaded in temporary mode.
 
-Sign-in attempts are limited separately to 15 per minute per connection IP. The app does not trust visitor-supplied forwarding headers. Depending on Render's proxy, testers may share an effective IP; if several team members hit this limit, wait a minute rather than repeatedly retrying. Private random access codes remain the main access control.
+## Database decision later
 
-## 6. Team acceptance test before inviting anyone else
+The app retains a shared storage interface with two implementations: in-memory working state and persistent SQLite. Your team can later choose local SQLite, a paid Render disk, or a hosted database such as Supabase (which requires a PostgreSQL adapter/migration). No hosted database credentials are needed now.
 
-Record dates and outcomes. Use fictional topics first.
-
-1. Verify the deployment is running the intended Git commit and live mode.
-2. Confirm an unsigned-in browser cannot read `/api/admin/export` or `/api/state`.
-3. Create separate codes for two teammates; verify they cannot see each other's histories.
-4. Test both styles with the same mild scenario and review whether their support behaviors differ as intended.
-5. Finish a chat. In admin, inspect its notes and confirm that they accurately reflect what was said.
-6. Start another chat in the same style and check its memory source IDs and relevant recall. Avoid encouraging unnecessary personal disclosure just to exercise memory.
-7. Assign the other style, sign back in and confirm the first style's notes are absent there.
-8. Pause AI in admin. Confirm a new message is blocked without an AI response; resume, then retry the same pending message.
-9. For a cap test, temporarily set `TESTER_DAILY_API_LIMIT=1` in a dedicated test database. One reply should work; a second attempt and the finishing summary should be blocked. Increase the cap and retry the summary. Restore the intended configuration afterward.
-10. Redeploy with the same database path. Confirm login codes, chats, notes and usage counts remain. This is the key persistence check.
-11. Test Stop during a reply, logout, memory correction, reset and deletion using test records.
-12. Check mobile layout and English wording with a teammate. Record any delays, errors, repetition or style drift.
-
-Do not include team trials in participant study results. Before participant collection, resolve the separate procedure/consent/privacy review, final conditions and assignment plan, measures and questionnaires, recruitment and withdrawal procedures, and study data handling. This chatbot release is not a validated clinical intervention.
-
-## 7. Privacy, backups and operation
-
-- The privacy notice names OpenAI processing and Render hosting, plus team access and the configured deletion date. Review it against the actual course procedure and provider arrangements. `store: false` is sent to the API; it is not a guarantee of zero provider retention.
-- Keep admin access limited to designated researchers. Neither the browser nor the tester code receives the API key.
-- The app does not write conversation text into its request logs. Render infrastructure still handles network metadata; downloaded exports contain sensitive records and must stay private.
-- For a content export use admin → Data tools → Download private records. This is JSON for review, not a restorable SQLite backup.
-- For a restorable backup, use Render's Shell and run `python tools/backup.py /var/data/chatbots-live.sqlite3 /var/data/backups/chatbots-live-YYYY-MM-DD.sqlite3`, replacing the date with a unique value. Download it through Render's SSH/SFTP facility and store it securely. Never copy just the live `.sqlite3` file while it is running in WAL mode.
-- A database backup contains tester access-code hashes and sessions as well as records. Protect it accordingly. Restoration replaces current state and may revive older access sessions; arrange a controlled pause and session invalidation before restoring. No automated restore tool is included.
-- Test the documented backup/restore procedure on a disposable copy before relying on it. Exports/backups are separate copies: app deletion does not remove them.
-- Persistent disk deployments may briefly interrupt service. Avoid redeploying while testers are chatting. Keep **one instance and one Gunicorn worker**: chat locks and startup recovery are designed for that topology. Do not add workers, enable preload, or add autoscaling.
-- If you suspect key disclosure, pause the app, revoke/replace the API key, update Render Environment and redeploy. If the researcher secret is disclosed, change it and invalidate old admin sessions using a controlled database operation; changing the secret alone does not revoke already issued sessions. For tester-code disclosure, delete the compromised test record and issue a new tester code after preserving only records you are permitted to retain.
-- Pause when a testing window ends. Remove the service/disk and private backups according to the retention plan when no longer needed.
-
-## Troubleshooting
-
-| Symptom | Check |
-|---|---|
-| Startup says attach persistent disk | Disk must be mounted at `/var/data`; check Render disk setup, not an ordinary folder |
-| Host/origin rejected | Open the exact public HTTPS URL; remove a wrong `PUBLIC_ORIGIN`; do not add paths or a trailing `/admin` to it |
-| Sending disabled | Setup mode deliberately disables AI; follow live activation steps |
-| Live startup refuses settings | Check key, contact and applicable review confirmation; never paste values into support chats |
-| Database mode/model differs | Select a new mode/model-specific database filename; preserve the existing one |
-| No tester codes after switch | A different database starts empty; create new invitations |
-| 401/403/404 from OpenAI | Key/project/model permissions may be wrong; inspect the safe user error and private API project settings |
-| 429 or quota errors | Check app attempt counters, API billing/credit and API rate limits; distinguish app caps from provider errors |
-| Memory failed | Chat is saved; fix the cause then admin → Inspect → Retry summary. Do not discard a successful chat to work around it |
-| Pending message after restart | Retry the same message/request; do not repeatedly submit new versions |
-| Local port in use | Open the existing local app or stop its terminal; Render uses its own port |
-
-Official references: [Render Python deployment](https://render.com/docs/deploy-flask), [Blueprint configuration](https://render.com/docs/blueprint-spec), [persistent disks](https://render.com/docs/disks), [health checks](https://render.com/docs/health-checks). The app is WSGI, so it does not require Flask.
+`render.persistent.yaml` and [the earlier persistent setup guide](docs/DEPLOY_RENDER_PERSISTENT.md) are optional future references. Do not select that Blueprint for the free preview. Re-enabling persistent memory requires deliberately selecting persistent storage and testing its full lifecycle; this preview does not verify the memory IV or complete the experiment.

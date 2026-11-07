@@ -1,3 +1,13 @@
+# Temporary preview verification — 7 November 2026
+
+- 84 automated tests passed, including real Gunicorn HTTP tests in persistent and temporary modes. Temporary mode was verified to start without a disk, keep current-chat context, clear chats on Finish/Stop/sign-out, reject exports/backups, avoid memory summaries and start empty after process restart.
+- Tests also verify no database directory/file is created by temporary storage, usage counts remain after finishing a chat, cross-tester isolation and Stop during an in-flight response.
+- JavaScript syntax and Git whitespace checks passed. No paid API requests were made. No Render deployment or GitHub push was performed.
+- The default Blueprint now uses Free with no disk; optional `render.persistent.yaml` preserves the earlier paid example. All temporary state and quotas reset on restart. API/provider spending must be controlled independently.
+- Existing local private settings/databases were not modified. Database/provider retention decisions and persistent-memory experiment readiness remain outstanding.
+
+---
+
 # Render preparation verification — 7 November 2026
 
 - 72 automated tests passed using the project virtual environment, including the actual Gunicorn startup command, HTTP login, remote Guide assignment, consent, demo reply, completed-chat memory generation, process restart and persisted memory/counter checks. Demo and mocked providers only; no paid API calls made for this update.

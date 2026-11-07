@@ -1,18 +1,15 @@
-# For a repository whose root contains this file and app/.
+# Free, temporary team preview. No disk or lasting chat storage.
+# App quotas reset on restart; use provider spending controls too.
 services:
   - type: web
     name: reassure-guide-team-test
     runtime: python
-    plan: starter
+    plan: free
     region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn -c gunicorn.conf.py app.server:application
     healthCheckPath: /health
     numInstances: 1
-    disk:
-      name: chatbot-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
@@ -20,8 +17,8 @@ services:
         value: render
       - key: CHATBOT_MODE
         value: setup
-      - key: CHATBOT_DB
-        value: /var/data/chatbots-setup.sqlite3
+      - key: STORAGE_MODE
+        value: temporary
       - key: ADMIN_KEY
         generateValue: true
       - key: OPENAI_API_KEY

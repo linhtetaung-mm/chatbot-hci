@@ -34,6 +34,9 @@ def configuration():
     if mode=='live' and not has_api_key(c['api_key']):raise ValueError('OpenAI API key is missing or still a placeholder. Add your real key privately to .env, or use CHATBOT_MODE=setup. No API request was sent.')
     if mode=='live' and (not has_api_key(c['api_key']) or not os.getenv('RESEARCHER_CONTACT') or os.getenv('HUMAN_TEST_REVIEW')!='confirmed'):
         raise ValueError('Live mode needs OPENAI_API_KEY, RESEARCHER_CONTACT and HUMAN_TEST_REVIEW=confirmed after the applicable course review.')
+    storage_mode=os.getenv('STORAGE_MODE','temporary')
+    if storage_mode not in ('temporary','persistent'):raise ValueError('STORAGE_MODE must be temporary or persistent.')
+    c['storage_mode']=storage_mode
     hosted=os.getenv('DEPLOYMENT','local')=='render' or os.getenv('RENDER')=='true'
     origin=(os.getenv('PUBLIC_ORIGIN') or ('https://'+os.environ['RENDER_EXTERNAL_HOSTNAME'] if os.getenv('RENDER_EXTERNAL_HOSTNAME') else c['origin'])).rstrip('/')
     parsed=urlsplit(origin)
@@ -41,9 +44,9 @@ def configuration():
         raise ValueError('PUBLIC_ORIGIN must be a plain origin, for example https://your-app.onrender.com.')
     if hosted:
         if parsed.scheme!='https':raise ValueError('Render requires an HTTPS PUBLIC_ORIGIN.')
-        if not Path(c['db']).is_absolute() or not str(Path(c['db']).resolve()).startswith('/var/data/'):
+        if storage_mode=='persistent' and (not Path(c['db']).is_absolute() or not str(Path(c['db']).resolve()).startswith('/var/data/')):
             raise ValueError('Render CHATBOT_DB must be inside the persistent disk at /var/data/.')
-        if not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
+        if storage_mode=='persistent' and not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
     limits={}
     for name,default in {'TESTER_DAILY_API_LIMIT':50,'GLOBAL_DAILY_API_LIMIT':250,'GLOBAL_TOTAL_API_LIMIT':500,'TESTER_MINUTE_API_LIMIT':3,'GLOBAL_CONCURRENT_API_LIMIT':5,'TESTER_DAILY_CHAT_LIMIT':4}.items():
         value=int(os.getenv(name,str(default)))

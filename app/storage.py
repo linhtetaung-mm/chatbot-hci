@@ -1,5 +1,5 @@
 """SQLite is the source of truth; no participant content is stored in Git."""
-import sqlite3,os
+import sqlite3,os,threading
 from pathlib import Path
 from contextlib import contextmanager,closing
 SCHEMA='''
@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS logins(hash TEXT PRIMARY KEY,tester_id TEXT REFERENCE
 class Storage:
     def __init__(self,path,mode,model):
         self.path=Path(path);self.path.parent.mkdir(parents=True,exist_ok=True)
+        self.initialize(mode,model)
+        os.chmod(self.path,0o600)
+    def initialize(self,mode,model):
         with self.connect() as db:
             db.executescript(SCHEMA)
             for k,v in {'schema':'1','mode':mode,'model':model}.items():
@@ -27,7 +30,6 @@ class Storage:
                 db.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',(k,v))
             # A terminated process cannot leave an active network operation behind.
             db.execute("UPDATE messages SET status='failed' WHERE status='pending'")
-        os.chmod(self.path,0o600)
     @contextmanager
     def connect(self):
         db=sqlite3.connect(self.path,timeout=15);db.row_factory=sqlite3.Row
@@ -42,3 +44,22 @@ class Storage:
         with self.connect() as source,closing(sqlite3.connect(target)) as dest:
             source.backup(dest);dest.commit()
         os.chmod(target,0o600)
+
+class MemoryStorage(Storage):
+    """Same repository interface, process RAM only: never opens a database file."""
+    def __init__(self,mode,model):
+        self._lock=threading.RLock()
+        self._db=sqlite3.connect(':memory:',check_same_thread=False)
+        self._db.row_factory=sqlite3.Row
+        self._db.execute('PRAGMA foreign_keys=ON')
+        self._db.execute('PRAGMA temp_store=MEMORY')
+        self.initialize(mode,model)
+    @contextmanager
+    def connect(self):
+        with self._lock:
+            try:yield self._db;self._db.commit()
+            except Exception:self._db.rollback();raise
+    def backup(self,destination):
+        raise ValueError('Backups are disabled for temporary team testing.')
+    def close(self):
+        with self._lock:self._db.close()

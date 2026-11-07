@@ -89,10 +89,10 @@ class DeploymentTests(unittest.TestCase):
         self.hosted();r=self.request('example.onrender.com','',method='GET',path='/health')
         self.assertEqual(r['status'],200);self.assertEqual(json.loads(r['body']),{'ok':True,'mode':'demo'});self.assertEqual(self.f.provider.calls,[])
     def test_render_configuration_rejects_missing_disk(self):
-        values={'ADMIN_KEY':'test-admin-secret-at-least-24-characters','DEPLOYMENT':'render','CHATBOT_MODE':'setup','RENDER_EXTERNAL_HOSTNAME':'example.onrender.com','CHATBOT_DB':'/var/data/test.sqlite3'}
+        values={'ADMIN_KEY':'test-admin-secret-at-least-24-characters','DEPLOYMENT':'render','STORAGE_MODE':'persistent','CHATBOT_MODE':'setup','RENDER_EXTERNAL_HOSTNAME':'example.onrender.com','CHATBOT_DB':'/var/data/test.sqlite3'}
         with patch('app.config.load_env'),patch.dict(os.environ,values,clear=True),patch('app.config.Path.is_mount',return_value=False):
             with self.assertRaisesRegex(ValueError,'persistent disk'):configuration()
     def test_render_configuration_detects_origin(self):
-        values={'ADMIN_KEY':'test-admin-secret-at-least-24-characters','DEPLOYMENT':'render','CHATBOT_MODE':'setup','RENDER_EXTERNAL_HOSTNAME':'example.onrender.com','CHATBOT_DB':'/var/data/test.sqlite3'}
+        values={'ADMIN_KEY':'test-admin-secret-at-least-24-characters','DEPLOYMENT':'render','STORAGE_MODE':'persistent','CHATBOT_MODE':'setup','RENDER_EXTERNAL_HOSTNAME':'example.onrender.com','CHATBOT_DB':'/var/data/test.sqlite3'}
         with patch('app.config.load_env'),patch.dict(os.environ,values,clear=True),patch('app.config.Path.is_mount',return_value=True),patch('app.config.Path.resolve',return_value=Path('/var/data/test.sqlite3')):
             c=configuration();self.assertEqual(c['origin'],'https://example.onrender.com');self.assertTrue(c['secure_cookie'])
