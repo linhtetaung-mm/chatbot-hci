@@ -1,10 +1,10 @@
 # Phase 1 audit and completion status
 
-Audit date: 3 November 2026. Scope: local Reassure and Guide chatbots with separate persistent memory and at least one supervised usability test. Deployment and the full participant experiment are outside this audit.
+Audit updated: 4 November 2026. Original software audit: 3 November 2026. Scope: local Reassure and Guide chatbots with separate persistent memory and at least one supervised usability test. Deployment and the full participant experiment are outside this audit.
 
-**Honest status: the software is ready for API setup and further testing; Phase 1 is not yet complete.** No API key was supplied, no live provider request was verified, and no completed human test record was supplied to this audit.
+**Current status: Live AI works in team testing, as confirmed by the project owner on 4 November; Phase 1 is not yet complete.** The owner confirms a real API key and conversations with both styles. Only team testing has taken place. The latest prompt revision, live summaries/recall and an external supervised usability session still need recorded review. The key and private transcripts were not inspected or reproduced in this documentation update. See the current PROJECT_TASK_GUIDE for the full plan.
 
-## What was verified before making changes
+## Historical software audit on 3 November
 
 The existing 49 tests passed. The app already contained an OpenAI Responses API adapter, explicit system/user/assistant messages, separate memory filtering, structured summaries and private storage. The screenshot's repeated reply matched the simulator's generic fallback. It did not show how a live model would respond. More prompt text or another canned variation would not solve the absence of a connected model.
 
@@ -27,8 +27,9 @@ The working configuration was moved from demo to setup only because its key was 
 - [x] Ownership/isolation, last-three recall, retry, restart, correction/reset/deletion and web boundaries verified automatically.
 - [x] Placeholder key is never submitted; setup mode cannot create an AI exchange or summary.
 - [x] Earlier browser checks verified both styles' simulator flows. Current placeholder screen checked separately; see VERIFICATION.md.
-- [ ] Actual API key/project/billing/model access configured and the opt-in API check completed.
-- [ ] Live multi-turn replies reviewed for context handling and nonrepetition across mild topics, including the user's bad-day example and follow-up “I don't know”.
+- [x] Real API access and both styles tested, as reported by the project owner on 4 November; not a new independently observed account check.
+- [ ] Exact live model/settings recorded and the optional synthetic diagnostic receipt reviewed if used.
+- [ ] Latest prompt version retested in new live chats for context, nonrepetition, short/uncertain replies, follow-through and natural closure. Earlier team conversations do not by themselves verify this revision.
 - [ ] Live summaries inspected for invented details, identifiers and attribution; both styles' later chats use only their own recent notes.
 - [ ] Researcher contact, support route, retention dates, consent and applicable course review confirmed before a human test.
 - [ ] At least one consenting adult completes a supervised usability test of both styles and repeated-chat memory; results recorded using the template.
@@ -41,3 +42,7 @@ A successful unit suite or six-call diagnostic is not proof that these unchecked
 Use mild or fictional scenarios: vague bad day, direct request for comfort, exam disappointment, delayed reply, neutral greeting, good news and a correction to remembered information. Include follow-ups such as “I don't know”, “you tell me”, and a topic change. Check that the bot responds to the latest message, avoids assumptions, varies phrasing, stays in style and stops appropriately. Run separate fictional keyword tests with the team rather than asking a participant to disclose crisis experiences.
 
 For one person's prototype test, both styles can be tried in separate conversations. That does not change the later experiment's between-participant design or establish causal effects.
+
+## Documentation reconciliation on 4 November
+
+The current guide includes memory and named styles in Phase 1, uses the standalone port-8766 app, records live team testing, and leaves outside usability testing and the full experiment outstanding. The existing 56 tests passed again with ResourceWarnings treated as errors. No new API calls or participant session were performed for this update.

@@ -2,7 +2,7 @@
 
 Two distinct chatbot styles with separate persistent memory for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. It uses Python 3.10+ and no third-party packages.
 
-**Current status: API setup pending.** The live API adapter exists, but you have not supplied an API key. Phase 1 is not complete until the real responses/memories and at least one supervised human usability test have been checked. See [the audit](docs/PHASE1_AUDIT.md).
+**Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).
 
 ## Start without an API key
 
@@ -94,6 +94,8 @@ app/storage.py / chatbot.py     SQLite, ownership and conversation lifecycle
 app/server.py / static/         Local API and simple interface
 local data/ and private/        Runtime records; never packaged
 
+docs/PROJECT_TASK_GUIDE.docx      Current detailed guide, progress and remaining experiment steps
+docs/PROJECT_TASK_GUIDE.md        Editable text of the same guide
 docs/PHASE1_AUDIT.md             Verified findings and remaining completion gates
 docs/API_SETUP.md               Short activation checklist
 docs/USABILITY_TEST_TEMPLATE.md  Blank form for the supervised human test

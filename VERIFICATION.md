@@ -44,3 +44,12 @@ The shareable package excludes private `.env`, databases, exports, backups, cach
 - Consulted the [official OpenAI prompt-engineering guide](https://developers.openai.com/api/docs/guides/prompt-engineering) for explicit instructions and examples. The existing role-based request construction, model settings, memory rules and stored conversation snapshots were preserved.
 - **56 existing automated tests passed**, with ResourceWarnings treated as errors. These verify application behaviour and payload handling; they do not establish the model’s conversational quality. No real API calls were made for this update.
 - Added a short live follow-through check to HOW_TO_USE.md. Restart the server and start a New chat to test the new instructions; earlier chats retain their original prompt snapshots.
+
+## Progress reconciliation — 4 November 2026
+
+- Reran the existing suite: **56 tests passed** with ResourceWarnings treated as errors. No application behaviour was changed in this documentation update.
+- The project owner confirmed Live AI with an API key and testing of both styles. This is explicitly recorded as owner-reported live team testing, not a new observed provider call. The owner confirmed no outside supervised usability test has been completed.
+- Updated the main task guide to Version 5 and synchronized readiness text with that confirmation. Corrected obsolete instructions about the active folder/port, Phase 1 memory and visible style labels; added detailed remaining checks, experiment procedure, five-member roles, reporting and November 19 schedule.
+- The latest follow-through prompt and live summary accuracy still require recorded quality checks. The six-call diagnostic receipt and exact private live model/settings were not independently verified here. No API key or personal transcript was read or reproduced, no billable calls were made and no participant findings were created.
+- The main guide is also included in docs/PROJECT_TASK_GUIDE.docx with an editable Markdown copy. The earlier Version 4 guide is archived outside the public package. No Git commit/push or old study-kit change was made.
+- Document QA: the updated 23-page Word guide was rendered and every page visually inspected. Four changed pages were rechecked after spacing/table refinements; the other 19 rendered pages matched the inspected images byte for byte. Exact prompt blocks and the matching packaged Word copy were checked structurally.

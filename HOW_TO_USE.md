@@ -119,8 +119,12 @@ These are manual response-quality checks, not automated proof. Demo uses fixed e
 
 ## API placeholder and Phase 1 status
 
-The private/public configuration now contains `OPENAI_API_KEY=PASTE_YOUR_OPENAI_API_KEY_HERE`. This is not a working key. Keep `CHATBOT_MODE=setup` while waiting. The setup screen makes no AI replies or summaries; previously saved demo records remain in their separate database.
+The public `.env.example` contains `OPENAI_API_KEY=PASTE_YOUR_OPENAI_API_KEY_HERE`. This is not a working key. On a new installation, keep `CHATBOT_MODE=setup` while waiting. Preserve an existing private live key; do not replace it with this placeholder. The setup screen makes no AI replies or summaries; previously saved demo records remain in their separate database.
 
 When you obtain a key, follow [API_SETUP.md](docs/API_SETUP.md). Stop and restart the server after editing settings, reload the browser and start a new chat. Do not merely change the model name or make prompts longer to try to repair a disconnected model.
 
 Before calling Phase 1 complete, use [the audit checklist](docs/PHASE1_AUDIT.md) and record at least one actual supervised human test using [the blank template](docs/USABILITY_TEST_TEMPLATE.md). Store the completed template privately, not beside its public blank copy. The new API diagnostic makes six opt-in synthetic calls and does not replace that human test.
+
+## Progress update on 4 November 2026
+
+The project owner confirms both styles were tested with Live AI and a real key. Only team testing has taken place; the external supervised test remains pending. Use [PROJECT_TASK_GUIDE.md](docs/PROJECT_TASK_GUIDE.md), or its Word copy, for the complete status, remaining work, five-member roles and Phase 2 procedure.
