@@ -15,7 +15,7 @@ class FakeProvider:
         return {'situation':'User reported: '+next(m['text'][:100] for m in history if m['role']=='user'),'feelings':'','user_insights':'','bot_said':'Offered support.'}
 class Tests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.cfg={'mode':'demo','model':'gpt-6-luna','reasoning':'none','db':self.tmp.name+'/test.sqlite3','admin_key':'UNIT-TEST-ONLY-ADMIN-SECRET-12345','api_key':'','port':8766,'origin':'http://127.0.0.1:8766','contact':'researcher@example.invalid','support':'Test support','delete_date':'2026-12-19'}
+        self.tmp=tempfile.TemporaryDirectory();self.cfg={'mode':'demo','model':'gpt-6-luna','reasoning':'none','db':self.tmp.name+'/test.sqlite3','admin_key':'UNIT-TEST-ONLY-ADMIN-SECRET-12345','api_key':'','port':8766,'origin':'http://127.0.0.1:8766','contact':'researcher@example.invalid','support':'Test support','delete_date':'2026-12-19','limits':{'TESTER_MINUTE_API_LIMIT':1000,'TESTER_DAILY_CHAT_LIMIT':1000}}
         self.provider=FakeProvider();self.bot=Chatbot(self.cfg,self.provider);self.t=self.bot.create_tester();self.auth=self.authorize(self.t['id'],'reassure')
     def tearDown(self):self.tmp.cleanup()
     def authorize(self,tid,style):

@@ -1,3 +1,5 @@
+> **Hosted team testing:** follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The local instructions below remain available. On Render, the researcher secret is in Environment settings, not a shared `.env` file.
+
 # How to use the Phase 1 chatbots
 
 ## 1. Who uses it and where

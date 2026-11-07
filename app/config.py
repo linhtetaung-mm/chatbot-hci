@@ -1,4 +1,5 @@
-"""Local-only configuration. Never print credentials."""
+"""Local and hosted configuration. Never print credentials."""
+from urllib.parse import urlsplit
 import os
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -33,5 +34,21 @@ def configuration():
     if mode=='live' and not has_api_key(c['api_key']):raise ValueError('OpenAI API key is missing or still a placeholder. Add your real key privately to .env, or use CHATBOT_MODE=setup. No API request was sent.')
     if mode=='live' and (not has_api_key(c['api_key']) or not os.getenv('RESEARCHER_CONTACT') or os.getenv('HUMAN_TEST_REVIEW')!='confirmed'):
         raise ValueError('Live mode needs OPENAI_API_KEY, RESEARCHER_CONTACT and HUMAN_TEST_REVIEW=confirmed after the applicable course review.')
+    hosted=os.getenv('DEPLOYMENT','local')=='render' or os.getenv('RENDER')=='true'
+    origin=(os.getenv('PUBLIC_ORIGIN') or ('https://'+os.environ['RENDER_EXTERNAL_HOSTNAME'] if os.getenv('RENDER_EXTERNAL_HOSTNAME') else c['origin'])).rstrip('/')
+    parsed=urlsplit(origin)
+    if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+        raise ValueError('PUBLIC_ORIGIN must be a plain origin, for example https://your-app.onrender.com.')
+    if hosted:
+        if parsed.scheme!='https':raise ValueError('Render requires an HTTPS PUBLIC_ORIGIN.')
+        if not Path(c['db']).is_absolute() or not str(Path(c['db']).resolve()).startswith('/var/data/'):
+            raise ValueError('Render CHATBOT_DB must be inside the persistent disk at /var/data/.')
+        if not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
+    limits={}
+    for name,default in {'TESTER_DAILY_API_LIMIT':50,'GLOBAL_DAILY_API_LIMIT':250,'GLOBAL_TOTAL_API_LIMIT':500,'TESTER_MINUTE_API_LIMIT':3,'GLOBAL_CONCURRENT_API_LIMIT':5,'TESTER_DAILY_CHAT_LIMIT':4}.items():
+        value=int(os.getenv(name,str(default)))
+        if value<1:raise ValueError(name+' must be a positive integer.')
+        limits[name]=value
+    c.update(origin=origin,hosted=hosted,secure_cookie=parsed.scheme=='https',allowed_host=parsed.netloc,limits=limits)
     c['api_key_configured']=has_api_key(c['api_key'])
     return c

@@ -1,8 +1,16 @@
-# Reassure and Guide — Phase 1 local prototype
+# Reassure and Guide — Phase 1 chatbot
 
-Two distinct chatbot styles with separate persistent memory for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. It uses Python 3.10+ and no third-party packages.
+Two distinct chatbot styles with separate persistent memory for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local mode uses Python 3.10+ and the standard library. Render uses Gunicorn (included in requirements.txt).
 
 **Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).
+
+**Hosting update — 7 November 2026:** Render configuration, private access and persistent quotas are implemented and locally tested. See [deployment verification](VERIFICATION.md). A Render deployment and live hosted acceptance test remain to be done.
+
+## Deploy for team testing on Render
+
+Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The included `render.yaml` sets up a paid service with a persistent disk and private environment settings. Setup mode is the initial default; enable live mode after completing the documented checks. No API key or existing tester data is included in deployment files.
+
+Hosting includes secure HTTPS cookies, exact host/origin checks, persistent API-attempt quotas, an admin pause/resume switch, and remote chatbot assignment. Each tester needs a private access code. Limits include memory summaries and failed attempts, across both styles. This is preparation for team testing, not completion of the four-condition experiment or approval for participant recruitment.
 
 ## Start without an API key
 

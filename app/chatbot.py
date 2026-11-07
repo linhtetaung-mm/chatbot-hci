@@ -2,6 +2,7 @@
 import hashlib,json,secrets,threading,time,re,sqlite3
 from pathlib import Path
 from .storage import Storage
+from .limits import UsageLimits
 from .provider import Provider,ProviderError,validate_notes,SAFETY_RESPONSE
 PROMPTS=json.loads(Path(__file__).with_name('prompts.json').read_text())
 GREETING="Hi, I’m here to listen. What’s been on your mind lately?"
@@ -13,7 +14,7 @@ class Error(Exception):
 class Chatbot:
     def __init__(self,cfg,provider=None):
         self.cfg=cfg;self.storage=Storage(cfg['db'],cfg['mode'],cfg['model']);self.provider=provider or Provider(cfg)
-        self.locks={};self.guard=threading.Lock()
+        self.locks={};self.guard=threading.Lock();self.usage=UsageLimits(self.storage,cfg)
     def lock(self,key):
         with self.guard:return self.locks.setdefault(key,threading.Lock())
     def event(self,db,tester,cid,name,detail=''):
@@ -80,6 +81,11 @@ class Chatbot:
                 if old:return {'id':old[0],'resumed':True}
                 rows=db.execute("SELECT m.id,m.status FROM conversations c JOIN memories m ON m.conversation_id=c.id WHERE c.tester_id=? AND c.style=? AND c.status='completed' AND m.status!='excluded' ORDER BY c.ended DESC,c.id DESC LIMIT 3",(t['id'],auth['style'])).fetchall()
                 if any(r['status']!='ready' for r in rows):raise Error('Earlier conversation saved, but its memory needs retry. Ask the researcher to retry the summary before a new chat.',409)
+                # Serialize quota check and creation, across both support styles.
+                db.execute('BEGIN IMMEDIATE')
+                day=int(time.time()//86400)*86400
+                created=db.execute('SELECT count(*) FROM conversations WHERE tester_id=? AND started>=?',(t['id'],day)).fetchone()[0]
+                if created>=self.cfg.get('limits',{}).get('TESTER_DAILY_CHAT_LIMIT',4):raise Error('Daily new-chat limit reached. Return after midnight UTC or contact the researcher.',429)
                 refs=[r['id'] for r in reversed(rows)];cid=uid('C');prompt_json=json.dumps(PROMPTS,sort_keys=True)
                 db.execute('INSERT INTO conversations VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,t['id'],auth['style'],'open',time.time(),None,self.cfg['model'],digest(prompt_json),prompt_json,json.dumps(refs)))
                 db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,model) VALUES(?,?,?,?,?,?,?,?)',(cid,0,'assistant',GREETING,'success','opening',time.time(),'FIXED_GREETING'))
@@ -124,7 +130,9 @@ class Chatbot:
                 history=[dict(r) for r in db.execute("SELECT role,text FROM messages WHERE conversation_id=? AND status='success' AND request_id!='opening' ORDER BY seq",(cid,))]+[{'role':'user','text':text.strip()}]
                 notes=self.selected_notes(db,c);prompts=json.loads(c['prompt_json'])
                 if sum(len(m['text'].encode()) for m in history)+len(json.dumps(notes).encode())+len(c['prompt_json'].encode())>55000:raise Error('Please finish this long conversation and start another.',409)
-            try:reply=self.provider.reply(prompts,c['style'],notes,history)
+            try:
+                with self.usage.reserve(c['tester_id'],'reply'):
+                    reply=self.provider.reply(prompts,c['style'],notes,history)
             except ProviderError as exc:
                 with self.storage.connect() as db:
                     db.execute("UPDATE messages SET status='failed' WHERE conversation_id=? AND request_id=? AND role='user' AND status='pending'",(cid,request_id))
@@ -167,7 +175,9 @@ class Chatbot:
                 if not c or not m:raise Error('Summary unavailable.',404)
                 if m['status'] in ('ready','excluded'):return {'ok':True,'memory_status':m['status']}
                 transcript=[dict(r) for r in db.execute("SELECT role,text FROM messages WHERE conversation_id=? AND status='success' ORDER BY seq",(cid,))]
-            try:notes=validate_notes(self.provider.summarize(json.loads(c['prompt_json']),transcript))
+            try:
+                with self.usage.reserve(c['tester_id'],'summary'):
+                    notes=validate_notes(self.provider.summarize(json.loads(c['prompt_json']),transcript))
             except ProviderError as exc:
                 with self.storage.connect() as db:
                     db.execute("UPDATE memories SET status='failed',error='summary_failed' WHERE conversation_id=? AND status!='excluded'",(cid,))
@@ -212,9 +222,22 @@ class Chatbot:
         with self.storage.connect() as db:
             if not db.execute('DELETE FROM testers WHERE id=?',(tid,)).rowcount:raise Error('Unknown tester.',404)
         return {'ok':True}
+    def set_paused(self,paused):
+        if not isinstance(paused,bool):raise Error('A pause choice is required.')
+        with self.storage.connect() as db:
+            db.execute("INSERT OR REPLACE INTO settings VALUES('api_paused',?)",('1' if paused else '0',))
+        return {'ok':True}
+    def assign(self,tid,style):
+        self.style(style)
+        with self.storage.connect() as db:
+            if not db.execute('UPDATE testers SET active_style=? WHERE id=?',(style,tid)).rowcount:raise Error('Unknown tester.',404)
+            # Revoke earlier tester sessions so the next sign-in uses the new style.
+            db.execute("DELETE FROM logins WHERE tester_id=? AND role='tester'",(tid,))
+            self.event(db,tid,None,'remote_style_assigned',style)
+        return {'ok':True}
     def admin_state(self):
         with self.storage.connect() as db:
-            return {'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'testers':[dict(r) for r in db.execute('SELECT id,created,consent,active_style,suspended FROM testers ORDER BY created')],
+            return {'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'usage':self.usage.state(),'testers':[dict(r) for r in db.execute('SELECT id,created,consent,active_style,suspended FROM testers ORDER BY created')],
               'conversations':[dict(r) for r in db.execute('SELECT c.id,c.tester_id,c.style,c.status,c.started,c.prompt_version,m.status AS memory_status FROM conversations c LEFT JOIN memories m ON m.conversation_id=c.id ORDER BY c.started DESC')]}
     def inspect(self,cid):
         with self.storage.connect() as db:

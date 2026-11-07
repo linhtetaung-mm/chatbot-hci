@@ -3,6 +3,9 @@ import sqlite3,os
 from pathlib import Path
 from contextlib import contextmanager,closing
 SCHEMA='''
+CREATE TABLE IF NOT EXISTS api_attempts(id INTEGER PRIMARY KEY,tester_hash TEXT NOT NULL,kind TEXT NOT NULL,started REAL NOT NULL,finished REAL,status TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS api_attempt_time ON api_attempts(started);
+CREATE INDEX IF NOT EXISTS api_attempt_tester ON api_attempts(tester_hash,started);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS testers(id TEXT PRIMARY KEY,code_hash TEXT UNIQUE NOT NULL,created REAL NOT NULL,consent REAL,active_style TEXT NOT NULL CHECK(active_style IN ('reassure','guide')),suspended INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,tester_id TEXT NOT NULL REFERENCES testers(id) ON DELETE CASCADE,style TEXT NOT NULL CHECK(style IN ('reassure','guide')),status TEXT NOT NULL CHECK(status IN ('open','completed','stopped','discarded')),started REAL NOT NULL,ended REAL,model TEXT NOT NULL,prompt_version TEXT NOT NULL,prompt_json TEXT NOT NULL,memory_refs TEXT NOT NULL);

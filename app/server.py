@@ -1,5 +1,6 @@
 """Local WSGI server. API data is never logged by the request handler."""
-import json,time,threading,traceback
+import json,time,threading
+from urllib.parse import urlsplit
 from pathlib import Path
 from http.cookies import SimpleCookie
 from socketserver import ThreadingMixIn
@@ -24,9 +25,11 @@ def application(env,start):
         labels={200:'OK',400:'Bad Request',401:'Unauthorized',403:'Forbidden',404:'Not Found',409:'Conflict',410:'Gone',413:'Too Large',429:'Too Many Requests',500:'Internal Error',503:'Unavailable'}
         start(f'{status} {labels.get(status,"Error")}',headers+[('Content-Type',ctype),('Content-Length',str(len(body)))]);return [body]
     try:
-        service=get_bot();path=env.get('PATH_INFO','/');method=env.get('REQUEST_METHOD','GET');data={}
+        service=get_bot()
+        if service.cfg.get('secure_cookie'):headers.append(('Strict-Transport-Security','max-age=31536000'))
+        path=env.get('PATH_INFO','/');method=env.get('REQUEST_METHOD','GET');data={}
         host=env.get('HTTP_HOST','')
-        if host and host!=f"127.0.0.1:{service.cfg['port']}":raise Error('Open the app using its 127.0.0.1 address.',403)
+        if host!=service.cfg.get('allowed_host',urlsplit(service.cfg['origin']).netloc):raise Error('Request host rejected.',403)
         if path in ('/','/admin','/app.js','/style.css') and method=='GET':
             f=ROOT/('index.html' if path in ('/','/admin') else path[1:]);return reply(f.read_bytes(),ctype='text/html; charset=utf-8' if f.suffix=='.html' else 'text/javascript; charset=utf-8' if f.suffix=='.js' else 'text/css; charset=utf-8')
         if path=='/health' and method=='GET':return reply({'ok':True,'mode':service.cfg['mode']})
@@ -41,18 +44,25 @@ def application(env,start):
             except (ValueError,TypeError):raise Error('Invalid JSON.')
             if not isinstance(data,dict):raise Error('JSON object required.')
         cookie=SimpleCookie();cookie.load(env.get('HTTP_COOKIE',''));token=cookie['chatbot_session'].value if 'chatbot_session' in cookie else ''
-        def set_cookie(value):headers.append(('Set-Cookie',f'chatbot_session={value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'))
+        cookie_flags='; Secure' if service.cfg.get('secure_cookie',False) else ''
+        def set_cookie(value):headers.append(('Set-Cookie',f'chatbot_session={value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+cookie_flags))
         if path=='/api/login' and method=='POST':
             ip=env.get('REMOTE_ADDR','local')
             with attempt_lock:
-                now=time.time();history=[x for x in attempts.get(ip,[]) if now-x<60]
+                now=time.time()
+                for key in list(attempts):
+                    if not attempts[key] or now-attempts[key][-1]>=60:attempts.pop(key,None)
+                if ip not in attempts and len(attempts)>=10000:raise Error('Sign-in is busy. Wait one minute.',429)
+                history=[x for x in attempts.get(ip,[]) if now-x<60]
                 if len(history)>=15:raise Error('Too many attempts. Wait one minute.',429)
                 attempts[ip]=history+[now]
             set_cookie(service.login(data.get('code',''),data.get('admin') is True));return reply({'ok':True})
-        if path=='/api/logout' and method=='POST':service.logout(token);headers.append(('Set-Cookie','chatbot_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'));return reply({'ok':True})
+        if path=='/api/logout' and method=='POST':service.logout(token);headers.append(('Set-Cookie','chatbot_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+cookie_flags));return reply({'ok':True})
         if path.startswith('/api/admin/'):
             service.authenticate(token,'admin')
             if path=='/api/admin/state' and method=='GET':return reply(service.admin_state())
+            if path=='/api/admin/pause' and method=='POST':return reply(service.set_paused(data.get('paused')))
+            if path=='/api/admin/assign' and method=='POST':return reply(service.assign(data.get('tester_id',''),data.get('style','')))
             if path=='/api/admin/create' and method=='POST':return reply(service.create_tester())
             if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style','')));return reply({'ok':True})
             if path=='/api/admin/inspect' and method=='POST':return reply(service.inspect(data.get('conversation_id','')))

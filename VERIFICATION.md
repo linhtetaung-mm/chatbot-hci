@@ -1,3 +1,15 @@
+# Render preparation verification — 7 November 2026
+
+- 72 automated tests passed using the project virtual environment, including the actual Gunicorn startup command, HTTP login, remote Guide assignment, consent, demo reply, completed-chat memory generation, process restart and persisted memory/counter checks. Demo and mocked providers only; no paid API calls made for this update.
+- Tests cover exact HTTPS origin/host validation, Secure cookies, denied unauthorized access, global/per-tester quotas, retries and summaries, cross-style quotas, concurrent reservations, pause persistence, missing-disk startup rejection and daily new-chat caps.
+- JavaScript syntax check, Python dependency check and Git whitespace check passed.
+- Deployment configuration reviewed against Render documentation. The manifest and public ZIP were regenerated after this update.
+- No existing `.env` or tester database was modified, no GitHub push was performed, and no Render service was created. Existing live API capability was not re-tested here. Actual Render mounting, health checks, HTTPS behavior, mobile UI and model availability still require the acceptance checks in `DEPLOY_RENDER.md`.
+- Local mode remains available. Production is one Gunicorn process with eight threads and one Render instance. Setup mode is the Blueprint default; a paid persistent disk is required.
+- Automated tests do not establish research approval, clinical safety or suitability of the full participant experiment. The earlier verification history follows.
+
+---
+
 # Verification record
 
 Date: 3 November 2026. Phase 1 prototype version 1.0.
