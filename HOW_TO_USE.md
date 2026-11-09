@@ -1,3 +1,5 @@
+> **Supabase now supported:** follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md). The temporary mode below remains optional; it is not the mode to use for durable Supabase records.
+
 > **Current free preview:** `STORAGE_MODE=temporary` does not save chat history or memory between chats. Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The persistent-memory instructions below apply only when persistent storage is deliberately enabled.
 
 > **Hosted team testing:** follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The local instructions below remain available. On Render, the researcher secret is in Environment settings, not a shared `.env` file.

@@ -9,7 +9,7 @@ class UsageLimits:
     def reserve(self,tester,kind):
         now=time.time();day=int(now//86400)*86400;tester_hash=hashlib.sha256(tester.encode()).hexdigest();limits=self.limits
         with self.storage.connect() as db:
-            db.execute('BEGIN IMMEDIATE')
+            db.begin_serialized()
             paused=db.execute("SELECT value FROM settings WHERE key='api_paused'").fetchone()
             if paused and paused[0]=='1':raise ProviderError('AI requests are paused by the researcher. No request was sent.')
             # Single Gunicorn worker; these reservations also survive process restarts.
@@ -23,7 +23,7 @@ class UsageLimits:
                 ("SELECT count(*) FROM api_attempts WHERE tester_hash=? AND status='active' AND started>?",(tester_hash,now-120),1,'An AI request for this tester is already running.')]
             for query,args,limit,message in checks:
                 if db.execute(query,args).fetchone()[0]>=limit:raise ProviderError(message+' No request was sent.')
-            attempt=db.execute("INSERT INTO api_attempts(tester_hash,kind,started,status) VALUES(?,?,?,'active')",(tester_hash,kind,now)).lastrowid
+            attempt=db.execute("INSERT INTO api_attempts(tester_hash,kind,started,status) VALUES(?,?,?,'active') RETURNING id",(tester_hash,kind,now)).fetchone()[0]
         status='failed'
         try:
             yield

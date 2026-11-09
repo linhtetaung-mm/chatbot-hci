@@ -1,3 +1,23 @@
+# Supabase connection diagnosis — 9 November 2026
+
+A user-authorized read-only connection attempt reached the Session pooler but failed certificate verification using system trust. URL and credentials were not printed. No certificate was found in the project or Downloads. Authentication has not been established because TLS must succeed first.
+
+Added safe error categorization, certificate-file prechecks and `python tools/database.py diagnose` (SELECT 1 only, no schema writes/locks or AI calls). Ten focused unit tests passed; 15 optional local-PostgreSQL integration tests were skipped in this focused run. The actual endpoint now returns the specific CA-certificate instructions. Connection remains blocked until the project's CA certificate is downloaded and configured. The existing URL/password were not changed and TLS verification was not disabled.
+
+---
+
+# Supabase backend verification — 9 November 2026
+
+- 107 tests passed with no skips using a disposable loopback PostgreSQL server and the project's virtual environment. Coverage includes existing RAM/SQLite behavior, actual PostgreSQL schema initialization, chat/summary persistence after reconnect, three-note retrieval, tester/style isolation, unique IDs/idempotency, foreign keys, rollback, quotas, pause, deletion, Stop during a pending response, mode/model protection, pending-record preservation and a non-owner restricted server role.
+- CLI `init`, `check` and `self-test` also completed over a disposable localhost TLS proxy backed by PostgreSQL, using a local certificate trusted explicitly by the client and `verify-full`. This is not a test of the real Supabase pooler or its certificate chain.
+- Dependency, JavaScript syntax and whitespace checks passed. The PostgreSQL driver is Psycopg 3.3.8. CI now provisions a disposable PostgreSQL service for integration coverage.
+- Missing database placeholders were appended to private `.env` and `.env.example`; pre-existing values were preserved without printing secrets. Supabase is not enabled until the user fills the URL and selects backend `supabase` with persistent mode. The local `.env` remains ignored by Git and excluded from the shareable ZIP.
+- No Supabase project was accessed, no actual credentials were validated, no OpenAI calls were made, and no existing chat database was migrated or cleared. The hosting choice remains open. Real endpoint/TLS/role verification and deployed acceptance tests remain required.
+- This update implements storage for the current chatbot, not the complete four-condition experimental workflow. Active prompts were not changed. Supabase does not automatically implement Fresh/Persistent assignment.
+- One process owns each database schema. The CLI and app cannot run against the same schema concurrently. Stop/start deployments are required; rolling replacement is unsupported.
+
+---
+
 # Temporary preview verification — 7 November 2026
 
 - 84 automated tests passed, including real Gunicorn HTTP tests in persistent and temporary modes. Temporary mode was verified to start without a disk, keep current-chat context, clear chats on Finish/Stop/sign-out, reject exports/backups, avoid memory summaries and start empty after process restart.

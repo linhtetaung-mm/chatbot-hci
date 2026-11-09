@@ -10,7 +10,7 @@ class GunicornSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
             origin=f'http://127.0.0.1:{port}';admin=secrets.token_urlsafe(32)
-            env={**os.environ,'CHATBOT_MODE':'demo','STORAGE_MODE':storage,'PORT':str(port),'PUBLIC_ORIGIN':origin,'ADMIN_KEY':admin,'CHATBOT_DB':temp+'/demo.sqlite3','DEPLOYMENT':'local','RENDER':'false','TESTER_MINUTE_API_LIMIT':'100'}
+            env={**os.environ,'CHATBOT_MODE':'demo','DATABASE_BACKEND':'sqlite','STORAGE_MODE':storage,'PORT':str(port),'PUBLIC_ORIGIN':origin,'ADMIN_KEY':admin,'CHATBOT_DB':temp+'/demo.sqlite3','DEPLOYMENT':'local','RENDER':'false','TESTER_MINUTE_API_LIMIT':'100'}
             jar=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
             def call(path,data=None):
                 req=urllib.request.Request(origin+path,data=None if data is None else json.dumps(data).encode(),headers={'Origin':origin,'X-Chatbot-Request':'1','Content-Type':'application/json'})

@@ -1,10 +1,16 @@
 # Reassure and Guide — Phase 1 chatbot
 
-Two distinct chatbot styles. The current default is a temporary team preview; optional persistent mode keeps separate memories for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local mode uses Python 3.10+ and the standard library. Render uses Gunicorn (included in requirements.txt).
+Two distinct chatbot styles. The current default is a temporary team preview; optional persistent mode keeps separate memories for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local SQLite/RAM modes use Python 3.10+ and the standard library; Supabase also requires the installed PostgreSQL driver. Render uses Gunicorn (included in requirements.txt).
 
 **Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).
 
 **Hosting update — 7 November 2026:** Free temporary Render configuration, private access and process-local quotas are implemented and locally tested. Optional persistent mode is retained. See [deployment verification](VERIFICATION.md). A Render deployment and live hosted acceptance test remain to be done.
+
+## Supabase database support — 9 November 2026
+
+Follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md). The app now supports Supabase PostgreSQL using a private schema, verified TLS and the IPv4 Session pooler. Select `DATABASE_BACKEND=supabase` with `STORAGE_MODE=persistent`, fill the private `.env` placeholder, install requirements and run the explicit schema setup/check tools. Existing API settings and local databases are preserved. No hosting choice is required to use it locally.
+
+The earlier review's “connector not implemented” finding is superseded by this backend update. Fixed experimental assignment, visit stages, questionnaires, full study consent and actual Supabase acceptance testing remain separate tasks. The prompt candidates have not been activated by this change.
 
 ## Deploy for team testing on Render
 

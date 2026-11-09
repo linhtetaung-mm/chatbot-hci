@@ -37,6 +37,17 @@ def configuration():
     storage_mode=os.getenv('STORAGE_MODE','temporary')
     if storage_mode not in ('temporary','persistent'):raise ValueError('STORAGE_MODE must be temporary or persistent.')
     c['storage_mode']=storage_mode
+    backend=os.getenv('DATABASE_BACKEND','sqlite').strip().lower()
+    if backend not in ('sqlite','supabase'):raise ValueError('DATABASE_BACKEND must be sqlite or supabase.')
+    schema=os.getenv('DATABASE_SCHEMA','').strip() or 'hci_'+mode
+    import re
+    if not re.fullmatch(r'hci_[a-z0-9_]{1,48}',schema):raise ValueError('DATABASE_SCHEMA must start with hci_ and contain only lowercase letters, digits and underscores.')
+    c.update(database_backend=backend,database_url=os.getenv('DATABASE_URL','').strip(),database_schema=schema,
+             database_sslrootcert=os.getenv('DATABASE_SSLROOTCERT','system').strip() or 'system')
+    if backend=='supabase':
+        if storage_mode!='persistent':raise ValueError('Supabase requires STORAGE_MODE=persistent; temporary mode would discard chats.')
+        from .postgres import validate_database_url
+        validate_database_url(c['database_url'])
     hosted=os.getenv('DEPLOYMENT','local')=='render' or os.getenv('RENDER')=='true'
     origin=(os.getenv('PUBLIC_ORIGIN') or ('https://'+os.environ['RENDER_EXTERNAL_HOSTNAME'] if os.getenv('RENDER_EXTERNAL_HOSTNAME') else c['origin'])).rstrip('/')
     parsed=urlsplit(origin)
@@ -44,9 +55,9 @@ def configuration():
         raise ValueError('PUBLIC_ORIGIN must be a plain origin, for example https://your-app.onrender.com.')
     if hosted:
         if parsed.scheme!='https':raise ValueError('Render requires an HTTPS PUBLIC_ORIGIN.')
-        if storage_mode=='persistent' and (not Path(c['db']).is_absolute() or not str(Path(c['db']).resolve()).startswith('/var/data/')):
+        if backend=='sqlite' and storage_mode=='persistent' and (not Path(c['db']).is_absolute() or not str(Path(c['db']).resolve()).startswith('/var/data/')):
             raise ValueError('Render CHATBOT_DB must be inside the persistent disk at /var/data/.')
-        if storage_mode=='persistent' and not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
+        if backend=='sqlite' and storage_mode=='persistent' and not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
     limits={}
     for name,default in {'TESTER_DAILY_API_LIMIT':50,'GLOBAL_DAILY_API_LIMIT':250,'GLOBAL_TOTAL_API_LIMIT':500,'TESTER_MINUTE_API_LIMIT':3,'GLOBAL_CONCURRENT_API_LIMIT':5,'TESTER_DAILY_CHAT_LIMIT':4}.items():
         value=int(os.getenv(name,str(default)))

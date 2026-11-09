@@ -7,6 +7,7 @@ from socketserver import ThreadingMixIn
 from wsgiref.simple_server import make_server,WSGIServer,WSGIRequestHandler
 from .chatbot import Chatbot,Error
 from .config import configuration
+from .postgres import DatabaseError
 ROOT=Path(__file__).with_name('static');bot=None;init_lock=threading.Lock();attempts={};attempt_lock=threading.Lock()
 def get_bot():
     global bot
@@ -90,6 +91,7 @@ def application(env,start):
             raise Error('Unknown action.')
         raise Error('Not found.',404)
     except Error as exc:return reply({'error':exc.message},exc.status)
+    except DatabaseError as exc:return reply({'error':str(exc)},503)
     except Exception:
         # No submitted text, tokens or API response bodies are logged.
         return reply({'error':'The app encountered a problem. Ask the researcher; your last saved records remain available.'},500)

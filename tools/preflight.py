@@ -5,7 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app.config import configuration,has_api_key
 try:
     c=configuration()
-    print('Mode:',c['mode']);print('Model:',c['model']);print('Real API key supplied (not verified):',has_api_key(c['api_key']));print('Local address:',c['origin']);print('Database:',c['db'])
+    print('Mode:',c['mode']);print('Model:',c['model']);print('Real API key supplied (not verified):',has_api_key(c['api_key']));print('Local address:',c['origin']);print('Database backend:',c.get('database_backend','sqlite'));print('Storage mode:',c['storage_mode']);print('Database target:',c['database_schema'] if c.get('database_backend')=='supabase' else c['db'])
     if c['mode']=='setup':print('STATUS: API NOT CONNECTED. Interface placeholder only; no AI replies or summaries.')
     elif c['mode']=='demo':print('STATUS: SIMULATED EXAMPLES. This does not test real conversation or memory quality.')
     else:print('STATUS: LIVE SETTINGS PRESENT. Actual API access and response quality have not been verified by this check.')

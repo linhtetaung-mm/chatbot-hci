@@ -1,4 +1,4 @@
-"""SQLite is the source of truth; no participant content is stored in Git."""
+"""Local SQLite/RAM repositories; remote repository is selected explicitly."""
 import sqlite3,os,threading
 from pathlib import Path
 from contextlib import contextmanager,closing
@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,conversation_id TEXT UNI
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY,tester_id TEXT REFERENCES testers(id) ON DELETE CASCADE,conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,event TEXT NOT NULL,created REAL NOT NULL,detail TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS logins(hash TEXT PRIMARY KEY,tester_id TEXT REFERENCES testers(id) ON DELETE CASCADE,role TEXT NOT NULL,style TEXT,expires REAL NOT NULL);
 '''
+class LocalConnection(sqlite3.Connection):
+    def begin_serialized(self):self.execute('BEGIN IMMEDIATE')
+
 class Storage:
     def __init__(self,path,mode,model):
         self.path=Path(path);self.path.parent.mkdir(parents=True,exist_ok=True)
@@ -27,12 +30,12 @@ class Storage:
             for k,v in {'schema':'1','mode':mode,'model':model}.items():
                 old=db.execute('SELECT value FROM settings WHERE key=?',(k,)).fetchone()
                 if old and old[0]!=v:raise ValueError('Database mode/model/schema differs. Preserve it and select a new CHATBOT_DB filename.')
-                db.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',(k,v))
+                db.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING',(k,v))
             # A terminated process cannot leave an active network operation behind.
             db.execute("UPDATE messages SET status='failed' WHERE status='pending'")
     @contextmanager
     def connect(self):
-        db=sqlite3.connect(self.path,timeout=15);db.row_factory=sqlite3.Row
+        db=sqlite3.connect(self.path,timeout=15,factory=LocalConnection);db.row_factory=sqlite3.Row
         db.execute('PRAGMA foreign_keys=ON');db.execute('PRAGMA journal_mode=WAL');db.execute('PRAGMA busy_timeout=15000')
         try:yield db;db.commit()
         except Exception:db.rollback();raise
@@ -49,7 +52,7 @@ class MemoryStorage(Storage):
     """Same repository interface, process RAM only: never opens a database file."""
     def __init__(self,mode,model):
         self._lock=threading.RLock()
-        self._db=sqlite3.connect(':memory:',check_same_thread=False)
+        self._db=sqlite3.connect(':memory:',check_same_thread=False,factory=LocalConnection)
         self._db.row_factory=sqlite3.Row
         self._db.execute('PRAGMA foreign_keys=ON')
         self._db.execute('PRAGMA temp_store=MEMORY')
@@ -63,3 +66,11 @@ class MemoryStorage(Storage):
         raise ValueError('Backups are disabled for temporary team testing.')
     def close(self):
         with self._lock:self._db.close()
+
+
+def create_storage(cfg):
+    if cfg.get('database_backend','sqlite')=='supabase':
+        from .postgres import PostgresStorage
+        return PostgresStorage(cfg)
+    if cfg.get('storage_mode')=='temporary':return MemoryStorage(cfg['mode'],cfg['model'])
+    return Storage(cfg['db'],cfg['mode'],cfg['model'])
