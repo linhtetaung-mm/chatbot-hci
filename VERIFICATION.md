@@ -1,3 +1,12 @@
+# CI password-authentication fix and Render guide — 9 November 2026
+
+- Reproduced the restricted-role integration test failure against password-enforcing local PostgreSQL: role creation used the SQL template password while the connection used `test-only`. Earlier trust-authenticated local tests concealed the mismatch. Fixed the synthetic password substitution; all 109 tests now pass with password authentication enabled and no skips.
+- Updated GitHub Actions checkout to v5 and setup-python to v6 to use their Node 24 runtimes. The screenshot's exact run traceback was not accessible; a new push/check run is needed to confirm that specific CI failure is resolved.
+- Added `DEPLOY_RENDER_SUPABASE.md` and optional `render.supabase.yaml`. The guide uses Render Secret Files and `/etc/secrets/prod-ca-2021.crt`; no private Mac directory or real credentials belong in GitHub Actions.
+- Existing local credentials/certificates were not altered. No Supabase data, OpenAI calls, GitHub push or Render deployment was involved. Stop/start deployment is required by the existing one-process-per-schema lock.
+
+---
+
 # Supabase connection diagnosis — 9 November 2026
 
 A user-authorized read-only connection attempt reached the Session pooler but failed certificate verification using system trust. URL and credentials were not printed. No certificate was found in the project or Downloads. Authentication has not been established because TLS must succeed first.

@@ -122,6 +122,8 @@ The initial Session pooler URL commonly uses the project's database owner. For t
 
 Update the participant information/consent to name the actual server host, Supabase storage region, OpenAI processing, access roles and retention/deletion arrangements. Raw free-text narratives are not anonymous simply because IDs replace names. Decide the handling of stopped chats, withdrawals, backups and exports before real collection.
 
+For step-by-step Render deployment with Secret Files, see [DEPLOY_RENDER_SUPABASE.md](DEPLOY_RENDER_SUPABASE.md).
+
 ## Backups and future hosting
 
 The old `tools/backup.py` is SQLite-only. Use Supabase/PostgreSQL dump and restore tools for this backend, and rehearse restoration into a separate test database. Free projects need private off-site exports rather than an assumption of paid backup coverage. [Supabase backup guidance](https://supabase.com/docs/guides/platform/backups).

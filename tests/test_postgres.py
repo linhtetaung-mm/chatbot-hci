@@ -140,7 +140,9 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.role='hci_role_'+secrets.token_hex(8)
         script=Path(__file__).resolve().parents[1].joinpath('app/migrations/server_role_optional.sql').read_text()
         ddl='\n'.join(line for line in script.splitlines() if not line.lstrip().startswith('--'))
-        ddl=ddl.replace('hci_chatbot_app',self.role).replace('hci_live',self.schema)
+        # Use the same synthetic password in CREATE ROLE and the TCP connection.
+        # Trust-authenticated local PostgreSQL used to hide this CI-only mismatch.
+        ddl=ddl.replace('hci_chatbot_app',self.role).replace('hci_live',self.schema).replace('REPLACE_PRIVATELY_WITH_A_STRONG_PASSWORD','test-only')
         with psycopg.connect(os.environ['HCI_TEST_POSTGRES_URL'],autocommit=True) as raw:
             for statement in ddl.split(';'):
                 if statement.strip():raw.execute(statement)

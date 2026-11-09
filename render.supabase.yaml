@@ -1,0 +1,43 @@
+# Optional Supabase-backed Render service. Initialize the matching schema locally
+# and add prod-ca-2021.crt as a Render Secret File BEFORE using this deployment.
+# No disk. One process per schema: stop any old/local copy before switching.
+services:
+  - type: web
+    name: reassure-guide-supabase
+    runtime: python
+    plan: free
+    region: singapore
+    numInstances: 1
+    autoDeployTrigger: off
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn.conf.py app.server:application
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DEPLOYMENT
+        value: render
+      - key: DATABASE_BACKEND
+        value: supabase
+      - key: STORAGE_MODE
+        value: persistent
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SCHEMA
+        value: hci_live
+      - key: DATABASE_SSLROOTCERT
+        value: /etc/secrets/prod-ca-2021.crt
+      - key: CHATBOT_MODE
+        value: live
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: OPENAI_REASONING_EFFORT
+        value: none
+      - key: RESEARCHER_CONTACT
+        sync: false
+      - key: HUMAN_TEST_REVIEW
+        sync: false

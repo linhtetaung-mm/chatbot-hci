@@ -22,8 +22,8 @@ jobs:
     env:
       HCI_TEST_POSTGRES_URL: postgresql://hci_test:local-ci-test-only@127.0.0.1:5432/hci_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt

@@ -12,6 +12,10 @@ Follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md). The app now supports Supabase Pos
 
 The earlier review's “connector not implemented” finding is superseded by this backend update. Fixed experimental assignment, visit stages, questionnaires, full study consent and actual Supabase acceptance testing remain separate tasks. The prompt candidates have not been activated by this change.
 
+## Deploy Supabase-backed app on Render
+
+Use [DEPLOY_RENDER_SUPABASE.md](DEPLOY_RENDER_SUPABASE.md). Supply the downloaded certificate as a Render Secret File and set the server path `/etc/secrets/prod-ca-2021.crt`, not the Mac path. Automated GitHub tests use a disposable PostgreSQL database and do not need the Supabase certificate or real secrets.
+
 ## Deploy for team testing on Render
 
 Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The included `render.yaml` sets up a free, temporary team preview with private environment settings and no disk. Setup mode is the initial default; enable live mode after completing the documented checks. No API key or existing tester data is included in deployment files.

@@ -1,14 +1,15 @@
 {
-  "version": "phase1-1.7-supabase-storage",
+  "version": "phase1-1.7.1-supabase-ci-render-guide",
   "files": {
     ".env.example": "cac71aff00a32912cb5758d64a353fb76a1a2ecc11cbb8cc7a5ea11ccb13d204",
-    ".github/workflows/tests.yml": "fd20687c7cd7ea9c9d8be233123dc822a859ed48664d7139546ede578dcd3b57",
+    ".github/workflows/tests.yml": "3519d0ea4c0f3c4510debca1d98c16e8758a211de53bf9c5ade54ee33b74ff96",
     ".gitignore": "c21e7159d8a7c53a4c60a1fd643e872ff384296b4bd1aea0b5c289973d116d3e",
     "DEPLOY_RENDER.md": "89f1b1ca00a24ff39277bf24770b8d1e174dd4a859f8b000386390c6660a7443",
+    "DEPLOY_RENDER_SUPABASE.md": "058610e8e0175ce59f96895cebf26e041fd6dbe3faef38ebaf0efab8b00516b2",
     "HOW_TO_USE.md": "de70530e7dc44345eaab44b2613d3b55695eb66194bf6a4332ed949193dae32e",
-    "README.md": "62125dfdbcdf342d97979e478bcf17fea9dc4aa636265b624b178fda3e568c8a",
-    "SUPABASE_SETUP.md": "7a7fce58033cf6bc34a5db537e7f84d5e525dafa752bd482d251cc4e55fbe22b",
-    "VERIFICATION.md": "5d46dffa36065d1c996dad73fa81d601e77a2cef430787473211e32bd0471d80",
+    "README.md": "a42570315f2e15674bf856b20d68fe5b82ed6400f0222f2194a447aec86b96e1",
+    "SUPABASE_SETUP.md": "8baee26a65380c7d52315d5efc692f745c0c31101ab5c89650404d74f3cf062d",
+    "VERIFICATION.md": "25ed200a4092b02ee5d11fb0bcc9d3ea672c2ce3d0fab9e47ccf9d5e348f7ce1",
     "app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/chatbot.py": "f83d0b46944af63003581dbbc7a5f9adb6d7b238872cb60a140a322dd2cafec5",
     "app/config.py": "529b9d412655adb89825a5419409cc53c0135e98915deb40f78c178f185f5d1d",
@@ -37,6 +38,7 @@
     "docs/preview-reassure.png": "ef6dfb4949514430a416e3d396dbdbc7f4cdaf4285be8a59df013479f6cb46f2",
     "gunicorn.conf.py": "a8ebd21427be5b6ce51875f38499a9be11f026851cbfbf3e61e7f1718c8919f6",
     "render.persistent.yaml": "f77a653ce862616dcb5806b4ba449c0abd6ec3ebb1e21ed47dd51d3e76eb24b4",
+    "render.supabase.yaml": "ef8a92eac4d95811dbdfdc4cee4dad47e64b00de80cc890506e2fb6356cd7420",
     "render.yaml": "d53644a1644b9647b8a1dd05ca508a3dbf27456bf8d999024baf7c92d858a863",
     "requirements.txt": "42d539f56adf1e047c517ed12719263e5b2f1a98d0556b661b08995e70683e32",
     "run.py": "77bd262f85933707d40de4e2ff6b014182306c9d1f60890695619307dc3b5258",
@@ -44,12 +46,12 @@
     "tests/test_chatbot.py": "e896636db55c47b62a4ddbcdc80a3a2d802f09d755d2a02c149ce61708d416c1",
     "tests/test_deployment.py": "1c88a071d9d582b3911fd4aed5d27169828acc6ada60e98b4b9d60ab75d1a1f8",
     "tests/test_gunicorn_smoke.py": "e0bb30bb1c503d6bcab5ae09ba39e540cc648266bf66db934b6474f3dd20655d",
-    "tests/test_postgres.py": "f04cae8f320d4bbe010bc59749375f2a1b0836d9045e6740e95bbeceec163b37",
+    "tests/test_postgres.py": "eb8aff8bb41c718d50d247f35bc3dcbe0951b7c33e40e7e86fb3f28a5e477c45",
     "tests/test_temporary.py": "74eaf15af88532ea4a2f36256665894fb9701920ec9ef220f6c95729e2f784dd",
     "tools/backup.py": "bffc81f292ca1bb21909476bb7071a0c3db433d8bb21e7fffdac37d939565608",
     "tools/check_api.py": "f053b23c901ffd0614ea5cb11630b869337d0c74835636e202f24c45bd762f9e",
     "tools/database.py": "7e5d46a3f572efbb8afbe37df0b7405f182a0ac77154bcf7234c7248edfe8636",
-    "tools/package.py": "77e3e0a6e9579a022502acf779a83d83640f570ccfcd3b6b83cbb2a3f31adc03",
+    "tools/package.py": "f86680e6de24a0877c61cbdcfec4acd01ed3f0e6589cd8b58b3efa986e7e0a70",
     "tools/preflight.py": "36c0f4b6dc54fdd9f881f14f2111292291d9bd920850ff92f4a5970fef083ed8"
   }
 }
