@@ -46,7 +46,8 @@ def application(env,start):
             if not isinstance(data,dict):raise Error('JSON object required.')
         cookie=SimpleCookie();cookie.load(env.get('HTTP_COOKIE',''));token=cookie['chatbot_session'].value if 'chatbot_session' in cookie else ''
         cookie_flags='; Secure' if service.cfg.get('secure_cookie',False) else ''
-        def set_cookie(value):headers.append(('Set-Cookie',f'chatbot_session={value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+cookie_flags))
+        max_age=3600*service.cfg.get('session_hours',168)
+        def set_cookie(value):headers.append(('Set-Cookie',f'chatbot_session={value}; HttpOnly; SameSite=Strict; Path=/; Max-Age={max_age}'+cookie_flags))
         if path=='/api/login' and method=='POST':
             ip=env.get('REMOTE_ADDR','local')
             with attempt_lock:
@@ -63,9 +64,10 @@ def application(env,start):
             service.authenticate(token,'admin')
             if path=='/api/admin/state' and method=='GET':return reply(service.admin_state())
             if path=='/api/admin/pause' and method=='POST':return reply(service.set_paused(data.get('paused')))
-            if path=='/api/admin/assign' and method=='POST':return reply(service.assign(data.get('tester_id',''),data.get('style','')))
-            if path=='/api/admin/create' and method=='POST':return reply(service.create_tester())
-            if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style','')));return reply({'ok':True})
+            if path=='/api/admin/assign' and method=='POST':return reply(service.assign(data.get('tester_id',''),data.get('style',''),data.get('memory') or None))
+            if path=='/api/admin/create' and method=='POST':return reply(service.create_tester(data.get('style') or 'reassure',data.get('memory') or 'persistent'))
+            if path=='/api/admin/enroll' and method=='POST':return reply(service.enroll())
+            if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style') or None));return reply({'ok':True})
             if path=='/api/admin/inspect' and method=='POST':return reply(service.inspect(data.get('conversation_id','')))
             if path=='/api/admin/retry' and method=='POST':return reply(service.summarize(data.get('conversation_id','')))
             if path=='/api/admin/reset' and method=='POST':
@@ -75,6 +77,7 @@ def application(env,start):
                 if data.get('confirmation')!='DELETE TESTER':raise Error('Type DELETE TESTER to confirm.')
                 return reply(service.delete(data.get('tester_id','')))
             if path=='/api/admin/export' and method=='GET':headers.append(('Content-Disposition','attachment; filename="private-chatbot-records.json"'));return reply(service.export())
+            if path=='/api/admin/export_chats' and method=='GET':headers.append(('Content-Disposition','attachment; filename="private-chats-one-row-per-chat.csv"'));return reply(service.export_chats().encode(),ctype='text/csv; charset=utf-8')
             raise Error('Not found.',404)
         auth=service.authenticate(token,'tester')
         if path=='/api/state' and method=='GET':
@@ -83,7 +86,8 @@ def application(env,start):
         if path=='/api/action' and method=='POST':
             action=data.get('action');cid=data.get('conversation_id','')
             if action=='consent':service.consent(auth,data);return reply({'ok':True})
-            if action=='start':return reply(service.start(auth))
+            if action=='start':return reply(service.start(auth,data.get('chat_type') or 'home',data.get('pre_distress')))
+            if action=='rate':return reply(service.rate(auth,cid,data))
             if action=='send':return reply(service.send(auth,cid,data.get('text',''),data.get('request_id','')))
             if action=='finish':return reply(service.finish(auth,cid))
             if action in ('stop','discard'):return reply(service.stop(auth,cid,action=='discard'))

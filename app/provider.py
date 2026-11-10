@@ -3,7 +3,7 @@ import json,re,urllib.request,urllib.error
 from .config import has_api_key
 FIELDS={'situation':700,'feelings':300,'user_insights':700,'bot_said':700}
 class ProviderError(Exception):pass
-SAFETY_RESPONSE="I’m glad you told me. This sounds beyond what this chatbot can support. Please stop here and tell the researcher so they can help you reach appropriate support."
+SAFETY_RESPONSE="I’m glad you told me. This sounds beyond what this chatbot can support. Please contact the Thailand Mental Health Hotline 1323 (24 hours) or AIT student counselling now, and let the research team know."
 def validate_notes(notes):
     if not isinstance(notes,dict) or set(notes)!=set(FIELDS):raise ProviderError('Summary has incorrect fields. Retry memory generation.')
     if any(not isinstance(notes[k],str) or len(notes[k])>limit for k,limit in FIELDS.items()) or len(' '.join(notes.values()).split())>=180:

@@ -29,7 +29,7 @@ def self_test(cfg):
         finally:b.storage.close()
 
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('action',choices=['init','check','self-test','diagnose'])
+p.add_argument('action',choices=['init','migrate','check','self-test','diagnose'])
 p.add_argument('--mode',choices=['setup','demo','live'],help='Override CHATBOT_MODE for this command only; a blank DATABASE_SCHEMA follows the mode.')
 p.add_argument('--schema',help='Override DATABASE_SCHEMA for this command only.')
 a=p.parse_args()
@@ -42,8 +42,8 @@ try:
         diagnose_connection(cfg);print('PASS: read-only database connection and TLS verification. No schema changes or AI calls made.')
     elif a.action=='self-test':self_test(cfg)
     else:
-        s=PostgresStorage(cfg,initialize=a.action=='init')
-        try:print('PASS:', 'schema initialized/validated' if a.action=='init' else 'database connection/schema validated', '|',cfg['database_schema'],'|',cfg['mode'])
+        s=PostgresStorage(cfg,initialize='migrate' if a.action=='migrate' else a.action=='init')
+        try:print('PASS:', {'init':'schema initialized/validated','migrate':'schema upgraded to study version 2 (existing records kept)'}.get(a.action,'database connection/schema validated'), '|',cfg['database_schema'],'|',cfg['mode'])
         finally:s.close()
 except ValueError as exc:raise SystemExit(str(exc)) from None
 except Exception:raise SystemExit('Database setup failed. Check project availability, certificate, password, schema ownership and creation permissions. No connection details were printed.') from None

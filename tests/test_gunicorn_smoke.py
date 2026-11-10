@@ -38,7 +38,7 @@ class GunicornSmoke(unittest.TestCase):
                     self.assertEqual(state['testers'],[]);self.assertEqual(state['usage']['attempts_total'],0)
                     return
                 call('/api/login',{'code':tester['code']});cid=call('/api/action',{'action':'start'})['id']
-                state=call('/api/state?conversation_id='+cid);self.assertEqual(state['bot_label'],'Guide');self.assertEqual(len(state['memories']),1)
+                state=call('/api/state?conversation_id='+cid);self.assertEqual(state['bot_label'],'Chatbot');self.assertEqual(len(state['memories']),1)
                 call('/api/login',{'code':admin,'admin':True});self.assertEqual(call('/api/admin/state')['usage']['attempts_total'],2)
             finally:
                 proc.terminate();proc.wait(10)

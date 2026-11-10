@@ -94,7 +94,7 @@ class PostgresIntegrationTests(unittest.TestCase):
     def test_private_tables_and_rls(self):
         with self.b.storage.connect() as db:
             tables=db.execute('SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname=?',(self.schema,)).fetchall()
-            self.assertEqual(len(tables),8);self.assertTrue(all(r['rowsecurity'] for r in tables))
+            self.assertEqual(len(tables),10);self.assertTrue(all(r['rowsecurity'] for r in tables))
     def test_second_process_is_rejected_and_close_releases_lock(self):
         with self.assertRaisesRegex(DatabaseError,'Another chatbot'):PostgresStorage(self.cfg)
         self.b.storage.close();self.b=Chatbot(self.cfg,self.f.provider)

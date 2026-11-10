@@ -41,3 +41,21 @@ services:
         sync: false
       - key: HUMAN_TEST_REVIEW
         sync: false
+      - key: SUPPORT_CONTACTS
+        sync: false
+      - key: SESSION_HOURS
+        value: "168"
+      - key: MIN_GUIDED_MESSAGES
+        value: "6"
+      - key: TESTER_DAILY_API_LIMIT
+        value: "80"
+      - key: GLOBAL_DAILY_API_LIMIT
+        value: "800"
+      - key: GLOBAL_TOTAL_API_LIMIT
+        value: "3000"
+      - key: TESTER_MINUTE_API_LIMIT
+        value: "6"
+      - key: GLOBAL_CONCURRENT_API_LIMIT
+        value: "5"
+      - key: TESTER_DAILY_CHAT_LIMIT
+        value: "6"

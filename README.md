@@ -1,5 +1,7 @@
 # Reassure and Guide — Phase 1 chatbot
 
+> **Study version (10 November 2026, branch `study-version`):** neutral chatbot, locked 2×2 assignment, Persistent/Fresh memory, in-app ratings and chat types. See [STUDY_CHANGES.md](STUDY_CHANGES.md) for what changed and [STUDY_HOW_TO_USE.md](STUDY_HOW_TO_USE.md) for how the team and participants use it. Where this README disagrees with those two files, follow them.
+
 Two distinct chatbot styles. The current default is a temporary team preview; optional persistent mode keeps separate memories for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local SQLite/RAM modes use Python 3.10+ and the standard library; Supabase also requires the installed PostgreSQL driver. Render uses Gunicorn (included in requirements.txt).
 
 **Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).

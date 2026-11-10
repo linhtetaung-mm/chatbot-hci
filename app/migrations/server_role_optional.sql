@@ -15,6 +15,8 @@ CREATE POLICY server_access ON hci_live.memories TO hci_chatbot_app USING (true)
 CREATE POLICY server_access ON hci_live.events TO hci_chatbot_app USING (true) WITH CHECK (true);
 CREATE POLICY server_access ON hci_live.logins TO hci_chatbot_app USING (true) WITH CHECK (true);
 CREATE POLICY server_access ON hci_live.api_attempts TO hci_chatbot_app USING (true) WITH CHECK (true);
+CREATE POLICY server_access ON hci_live.assignments TO hci_chatbot_app USING (true) WITH CHECK (true);
+CREATE POLICY server_access ON hci_live.chat_meta TO hci_chatbot_app USING (true) WITH CHECK (true);
 -- Then update DATABASE_URL locally: replace postgres.PROJECT_REF username with
 -- hci_chatbot_app.PROJECT_REF and use THIS role's password; keep pooler host/port.
 -- Stop the owner-backed app first, then run check and repeat synthetic validation.

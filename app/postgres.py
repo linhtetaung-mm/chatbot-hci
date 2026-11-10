@@ -101,7 +101,8 @@ class PostgresStorage:
         self.initialize_requested=initialize
         self._open()
         try:
-            if initialize:self.initialize()
+            if initialize=='migrate':self.migrate()
+            elif initialize:self.initialize()
             else:self.check()
         except Exception:self.close();raise
     def _open(self):
@@ -142,19 +143,32 @@ class PostgresStorage:
                 self._raw.execute(self._sql.SQL('CREATE SCHEMA {}').format(self._sql.Identifier(self.schema)))
                 self._raw.execute(self._sql.SQL('REVOKE ALL ON SCHEMA {} FROM PUBLIC').format(self._sql.Identifier(self.schema)))
                 self._raw.execute(self._sql.SQL('SET LOCAL search_path TO {}, pg_catalog').format(self._sql.Identifier(self.schema)))
-                migration=Path(__file__).with_name('migrations').joinpath('001_postgres.sql').read_text()
-                # Versioned file contains only DDL statements/comments, no procedural blocks.
-                ddl='\n'.join(line for line in migration.splitlines() if not line.lstrip().startswith('--'))
-                for statement in ddl.split(';'):
-                    if statement.strip():self._raw.execute(statement)
-                for key,value in {'schema':'1','postgres_migration':'1','mode':self.cfg['mode'],'model':self.cfg['model']}.items():
+                for name in ('001_postgres.sql','002_study.sql'):self._run_migration(name)
+                for key,value in {'schema':'2','postgres_migration':'2','mode':self.cfg['mode'],'model':self.cfg['model']}.items():
                     self._raw.execute('INSERT INTO settings(key,value) VALUES(%s,%s)',(key,value))
             # Existing schemas are validated, never dropped, cleared, or changed silently.
+        self.check()
+    def _run_migration(self,name):
+        migration=Path(__file__).with_name('migrations').joinpath(name).read_text()
+        # Versioned files contain only DDL statements/comments, no procedural blocks.
+        ddl='\n'.join(line for line in migration.splitlines() if not line.lstrip().startswith('--'))
+        for statement in ddl.split(';'):
+            if statement.strip():self._raw.execute(statement)
+    def migrate(self):
+        """Explicit admin command: upgrade an existing schema-1 study schema to schema 2 in place."""
+        with self._raw.transaction():
+            self._raw.execute(self._sql.SQL('SET LOCAL search_path TO {}, pg_catalog').format(self._sql.Identifier(self.schema)))
+            current=self._raw.execute("SELECT value FROM settings WHERE key='postgres_migration'").fetchone()
+            if current and current[0]=='1':
+                self._run_migration('002_study.sql')
+                self._raw.execute("UPDATE settings SET value='2' WHERE key IN ('schema','postgres_migration')")
         self.check()
     def check(self):
         with self.connect() as db:
             values={r['key']:r['value'] for r in db.execute('SELECT key,value FROM settings')}
-            expected={'schema':'1','postgres_migration':'1','mode':self.cfg['mode'],'model':self.cfg['model']}
+            if values.get('postgres_migration')=='1':
+                raise DatabaseError('This database uses the older schema. Run: python3 tools/database.py migrate (keeps all existing records).')
+            expected={'schema':'2','postgres_migration':'2','mode':self.cfg['mode'],'model':self.cfg['model']}
             if any(values.get(k)!=v for k,v in expected.items()):
                 raise DatabaseError('Database schema/mode/model does not match. Preserve existing data and initialize a different hci_* schema for new mode/model settings.')
     def close(self):
