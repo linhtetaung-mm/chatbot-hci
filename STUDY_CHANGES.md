@@ -143,3 +143,10 @@ Combines the chatbot download with the two Google Forms into two tables that ope
 ## 14. "Typing…" bubble (10 November, late)
 
 The participant's message now appears the moment they press Send, with an animated "typing" bubble from the chatbot until the reply arrives. The message box, Send and Finish are disabled while waiting; Stop still works. After each message the page makes one request instead of two. Server code is unchanged. Files: `app/static/app.js`, `app/static/style.css`.
+
+## 15. Adding more study IDs later (11 November)
+
+- **Fixed:** loading a second assignment list used to add nothing (its order numbers clashed with the first list). New IDs are now queued after all existing IDs.
+- **New researcher button** "Add study IDs" (in "Enroll the next participant"): adds 4, 8 or 12 IDs in freshly shuffled blocks of 4, numbered after the last one (P49, P50, ...). Works while the app is live on Render; no laptop tool needed.
+- `tools/assignments.py generate` has `--start` to continue the numbering (e.g. `--start 49`).
+- Checked: deleting a participant removes their account, chats, messages, notes, ratings and logins; their access code stops working; their study ID stays used and is never given out again.

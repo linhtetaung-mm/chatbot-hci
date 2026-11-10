@@ -46,15 +46,37 @@ class Chatbot:
     def _insert_tester(self,db,tid,code,style,memory,study_id,locked):
         db.execute('INSERT INTO testers(id,code_hash,created,consent,active_style,suspended,study_id,memory,locked) VALUES(?,?,?,?,?,?,?,?,?)',(tid,digest(normalize_code(code)),time.time(),None,style,0,study_id,memory,1 if locked else 0))
     def load_assignments(self,rows):
-        """Load the concealed, pre-randomized assignment list. Existing study IDs are never changed."""
+        """Load a concealed, pre-randomized assignment list. Existing study IDs are never changed.
+        New IDs are queued AFTER every existing ID, in the file's order, so a second list can be added later."""
         added=0
         with self.storage.connect() as db:
-            for r in rows:
+            db.begin_serialized()
+            base=db.execute('SELECT COALESCE(MAX(seq),0) FROM assignments').fetchone()[0]
+            for r in sorted(rows,key=lambda r:int(r['seq'])):
                 self.style(r['style'])
                 if r['memory'] not in MEMORY or r['scenario'] not in ('A','B'):raise Error('Invalid assignment row: '+str(r.get('study_id')))
-                if db.execute('SELECT 1 FROM assignments WHERE study_id=? OR seq=?',(r['study_id'],int(r['seq']))).fetchone():continue
-                db.execute('INSERT INTO assignments(study_id,seq,style,memory,scenario) VALUES(?,?,?,?,?)',(r['study_id'],int(r['seq']),r['style'],r['memory'],r['scenario']));added+=1
+                if db.execute('SELECT 1 FROM assignments WHERE study_id=?',(r['study_id'],)).fetchone():continue
+                added+=1
+                db.execute('INSERT INTO assignments(study_id,seq,style,memory,scenario) VALUES(?,?,?,?,?)',(r['study_id'],base+added,r['style'],r['memory'],r['scenario']))
         return added
+    def add_study_ids(self,count,prefix='P'):
+        """Researcher button: append `count` new study IDs (a multiple of 4) in freshly shuffled blocks of 4,
+        numbered after the highest existing ID with this prefix. Conditions stay concealed."""
+        if isinstance(count,bool) or not isinstance(count,int) or count<4 or count>48 or count%4:raise Error('Add 4, 8, 12 ... up to 48 study IDs at a time.')
+        if not re.fullmatch(r'[A-Z]{1,3}',prefix):raise Error('Invalid prefix.')
+        rng=secrets.SystemRandom();conds=[(s,m) for s in STYLES for m in MEMORY]
+        with self.storage.connect() as db:
+            existing=db.execute('SELECT study_id,style,memory FROM assignments').fetchall()
+            nums=[int(r['study_id'][len(prefix):]) for r in existing if r['study_id'].startswith(prefix) and r['study_id'][len(prefix):].isdigit()]
+            seen={c:sum(1 for r in existing if (r['style'],r['memory'])==c) for c in conds}
+        start=max(nums,default=0);rows=[]
+        for b in range(count//4):
+            block=conds[:];rng.shuffle(block)
+            for style,memory in block:
+                n=start+len(rows)+1;rows.append({'study_id':f'{prefix}{n:02d}','seq':len(rows)+1,'style':style,'memory':memory,'scenario':'AB'[seen[(style,memory)]%2]});seen[(style,memory)]+=1
+        added=self.load_assignments(rows)
+        with self.storage.connect() as db:self.event(db,None,None,'study_ids_added',json.dumps({'count':added,'first':rows[0]['study_id'],'last':rows[-1]['study_id']}))
+        return {'added':added,'first':rows[0]['study_id'],'last':rows[-1]['study_id']}
     def enroll(self):
         """Give the next unused study ID, in list order, to a new participant. The condition is locked."""
         with self.storage.connect() as db:

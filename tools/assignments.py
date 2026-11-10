@@ -13,7 +13,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 CONDITIONS=[('reassure','persistent'),('reassure','fresh'),('guide','persistent'),('guide','fresh')]
 FIELDS=['study_id','seq','style','memory','scenario']
 
-def generate(n,seed,prefix):
+def generate(n,seed,prefix,start=1):
     rng=random.Random(seed);rows=[];seen={c:0 for c in CONDITIONS}
     while len(rows)<n:
         block=CONDITIONS[:];rng.shuffle(block)
@@ -21,7 +21,7 @@ def generate(n,seed,prefix):
             if len(rows)>=n:break
             scenario='AB'[seen[(style,memory)]%2]  # alternate A/B within each condition
             seen[(style,memory)]+=1
-            rows.append({'study_id':f'{prefix}{len(rows)+1:02d}','seq':len(rows)+1,'style':style,'memory':memory,'scenario':scenario})
+            rows.append({'study_id':f'{prefix}{start+len(rows):02d}','seq':len(rows)+1,'style':style,'memory':memory,'scenario':scenario})
     return rows
 
 def bot(mode):
@@ -38,6 +38,7 @@ p.add_argument('file',nargs='?',default='private/assignments.csv')
 p.add_argument('--n',type=int,default=48,help='Number of study IDs (use a multiple of 4).')
 p.add_argument('--seed',type=int,help='Random seed. Default: a new secret random seed (recorded in the file name).')
 p.add_argument('--prefix',default='P')
+p.add_argument('--start',type=int,default=1,help='First ID number, e.g. 49 to continue after P48.')
 p.add_argument('--mode',choices=['setup','demo','live'],help='Override CHATBOT_MODE for this command only.')
 a=p.parse_args()
 if a.action=='generate':
@@ -47,7 +48,7 @@ if a.action=='generate':
     if path.exists():raise SystemExit(f'{path} already exists. Keep it; choose another file name if you really need a new list.')
     path.parent.mkdir(parents=True,exist_ok=True)
     with open(path,'w',newline='') as f:
-        w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerows(generate(a.n,seed,a.prefix))
+        w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerows(generate(a.n,seed,a.prefix,a.start))
     os.chmod(path,0o600)
     Path(str(path)+'.seed').write_text(str(seed)+'\n')
     print(f'Wrote {a.n} study IDs to {path} (seed saved next to it). Keep this file private; do not open it in front of participants.')

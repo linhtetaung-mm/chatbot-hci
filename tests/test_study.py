@@ -90,4 +90,16 @@ class StudyTests(unittest.TestCase):
         src=Path('tools/combine_data.py').read_text().split('p=argparse.ArgumentParser')[0];ns={'__file__':'tools/combine_data.py'};exec(src,ns)
         for raw in ['p7','P07',' P 07','p007']:self.assertEqual(ns['norm_id'](raw),'P07')
         self.assertAlmostEqual(ns['kappa']([0,1,2,3],[0,1,2,3]),1.0)
+    def test_more_ids_can_be_added_later_and_deleted_ids_are_not_reused(self):
+        e,a=self.participant();self.bot.delete(e['id'])
+        for _ in range(3):self.bot.enroll()
+        with self.assertRaises(Error):self.bot.enroll()
+        r=self.bot.add_study_ids(4);self.assertEqual((r['added'],r['first'],r['last']),(4,'P05','P08'))
+        ids=[self.bot.enroll()['study_id'] for _ in range(4)];self.assertEqual(ids,['P05','P06','P07','P08'])
+        with self.bot.storage.connect() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM assignments WHERE seq>4").fetchone()[0],4)
+            self.assertIsNone(db.execute("SELECT tester_id FROM assignments WHERE study_id='P01'").fetchone()[0])
+        second=[dict(r,study_id='Q'+r['study_id'][1:]) for r in assignment_rows()]
+        self.assertEqual(self.bot.load_assignments(second),4)
+        with self.assertRaises(Error):self.bot.add_study_ids(5)
 if __name__=='__main__':unittest.main()

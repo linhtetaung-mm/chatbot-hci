@@ -67,6 +67,7 @@ def application(env,start):
             if path=='/api/admin/assign' and method=='POST':return reply(service.assign(data.get('tester_id',''),data.get('style',''),data.get('memory') or None))
             if path=='/api/admin/create' and method=='POST':return reply(service.create_tester(data.get('style') or 'reassure',data.get('memory') or 'persistent'))
             if path=='/api/admin/enroll' and method=='POST':return reply(service.enroll())
+            if path=='/api/admin/add_ids' and method=='POST':return reply(service.add_study_ids(data.get('count'),data.get('prefix') or 'P'))
             if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style') or None));return reply({'ok':True})
             if path=='/api/admin/inspect' and method=='POST':return reply(service.inspect(data.get('conversation_id','')))
             if path=='/api/admin/retry' and method=='POST':return reply(service.summarize(data.get('conversation_id','')))

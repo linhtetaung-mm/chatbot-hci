@@ -48,7 +48,7 @@ python3 tools/assignments.py status               # e.g. "0 of 48 study IDs used
 
 - Every 4 IDs contain all 4 conditions, so the groups stay balanced as long as IDs are used in order.
 - `private/assignments.csv` shows the conditions. Keep it private; do not open it during sessions and never give it to the coders.
-- If you need more IDs later, generate a second file with a different name and `--prefix Q`, then load it.
+- If you need more IDs later, use **Add study IDs** on the researcher page (4, 8 or 12 at a time). This works while the app is live. (The command-line `load` cannot run while Render is using the same database area.)
 
 ## A5. Test accounts and pilot
 
