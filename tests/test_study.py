@@ -87,9 +87,48 @@ class StudyTests(unittest.TestCase):
         for _ in range(4):
             e,a=self.participant();cid=self.bot.start(a,'home',20)['id'];self.assertIn(self.bot.state(a,cid)['messages'][0]['text'],GREETINGS)
     def test_combine_tool_normalises_ids(self):
-        src=Path('tools/combine_data.py').read_text().split('p=argparse.ArgumentParser')[0];ns={'__file__':'tools/combine_data.py'};exec(src,ns)
-        for raw in ['p7','P07',' P 07','p007']:self.assertEqual(ns['norm_id'](raw),'P07')
-        self.assertAlmostEqual(ns['kappa']([0,1,2,3],[0,1,2,3]),1.0)
+        from tools.combine_data import norm_id,kappa
+        for raw in ['p7','P07',' P 07','p007']:self.assertEqual(norm_id(raw),'P07')
+        self.assertAlmostEqual(kappa([0,1,2,3],[0,1,2,3]),1.0)
+
+    def test_cannot_bypass_pending_participant_ratings(self):
+        e,a=self.participant();cid=self.chat(a,rate=False)
+        with self.assertRaisesRegex(Error,'three questions'):self.bot.start(a,'home',30)
+        self.bot.rate(a,cid,{'post_distress':20,'support_needed':6,'felt_understood':5})
+        self.assertIn('id',self.bot.start(a,'home',30))
+
+    def test_resume_and_invalid_start_do_not_retry_summaries(self):
+        from unittest.mock import patch
+        e=self.bot.enroll();a=self.bot.authenticate(self.bot.login(e['code']))
+        with patch.object(self.bot,'retry_pending_summaries') as retry:
+            with self.assertRaises(Error):self.bot.start(a,'home',30)
+            retry.assert_not_called()
+            self.bot.consent(a,CONSENT);cid=self.bot.start(a,'home',30)['id']
+            retry.assert_called_once();retry.reset_mock()
+            self.assertEqual(self.bot.start(a,'home',30),{'id':cid,'resumed':True})
+            retry.assert_not_called()
+
+    def test_replacing_lost_code_preserves_assignment_and_records(self):
+        e,a=self.participant();cid=self.chat(a);token=self.bot.login(e['code'])
+        replacement=self.bot.reissue_code(e['id'])
+        with self.assertRaises(Error):self.bot.login(e['code'])
+        with self.assertRaises(Error):self.bot.authenticate(token)
+        new_auth=self.bot.authenticate(self.bot.login(replacement['code']))
+        self.assertEqual(new_auth['style'],a['style'])
+        self.assertEqual(self.bot.state(new_auth,cid)['study_id'],e['study_id'])
+        self.assertEqual(self.bot.inspect(cid)['conversation']['status'],'completed')
+        with self.bot.storage.connect() as db:
+            row=db.execute('SELECT study_id,memory,locked FROM testers WHERE id=?',(e['id'],)).fetchone()
+            self.assertEqual((row['study_id'],row['memory'],row['locked']),(e['study_id'],'fresh',1))
+            self.assertEqual(db.execute('SELECT count(*) FROM testers').fetchone()[0],1)
+            self.assertNotIn(replacement['code'],json.dumps(self.bot.export()))
+
+    def test_admin_finished_counts_include_all_types_and_zero_counts(self):
+        e,a=self.participant();self.chat(a,'first',3);self.chat(a,'home',2)
+        other=self.bot.enroll()
+        people={p['id']:p for p in self.bot.admin_state()['testers']}
+        self.assertEqual(people[e['id']]['finished_chats'],{'first':1,'home':1,'final':0})
+        self.assertEqual(people[other['id']]['finished_chats'],{'first':0,'home':0,'final':0})
     def test_more_ids_can_be_added_later_and_deleted_ids_are_not_reused(self):
         e,a=self.participant();self.bot.delete(e['id'])
         for _ in range(3):self.bot.enroll()

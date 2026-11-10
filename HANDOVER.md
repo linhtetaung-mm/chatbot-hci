@@ -1,5 +1,7 @@
 # Handover: Reassure or Guide study chatbot
 
+> Historical handover. The deployment-lock/concurrency changes described as uncommitted below were committed in `f0d9247` and are included in this cleanup. Use [the current team guide](docs/TEAM_GUIDE.md) and [engineering review](docs/ENGINEERING_REVIEW.md) for software operation and verified status. Historical host/database observations below have not been re-verified by this cleanup; this note does not change the study protocol.
+
 Written 10–11 November 2026 by Barnnita (with Claude) for the team member who continues. Read this first, then the team guide (Claude Doc "Reassure or Guide: Project Guide for the Team"), then `STUDY_HOW_TO_USE.md`. Submission: **19 November 2026**.
 
 ## 1. The study in five lines

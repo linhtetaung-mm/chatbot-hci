@@ -1,5 +1,7 @@
 # Deploy the Supabase-backed chatbot on Render
 
+> Current release instructions: [commit, push and deploy checklist](docs/RELEASE_GUIDE.md). The historical text below predates the hosted lock-wait fix, current quota defaults, study-version features and liveness-only health endpoint. Use the current checklist for this release.
+
 9 November 2026. This is the current deployment guide for **Supabase**, not the earlier temporary preview or SQLite disk configuration. Render is the application host; Supabase stores the records. No Render disk is needed. GitHub test execution is separate from the running service.
 
 ## 1. Push the CI fix first

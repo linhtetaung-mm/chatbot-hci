@@ -14,6 +14,8 @@ class TemporaryTests(unittest.TestCase):
         c=self.f.start();self.f.send(c)
         self.assertFalse(Path(self.f.tmp.name+'/never-created').exists())
         self.assertEqual(self.b.state(self.f.auth,c)['storage_mode'],'temporary')
+    def test_cannot_enroll_real_participants_in_volatile_storage(self):
+        with self.assertRaisesRegex(Error,'persistent storage'):self.b.enroll()
     def test_finish_clears_without_summary_or_notes(self):
         c=self.f.start();self.f.send(c);self.f.provider.summary_fail=True
         self.assertEqual(self.b.finish(self.f.auth,c)['memory_status'],'disabled')

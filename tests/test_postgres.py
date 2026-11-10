@@ -91,6 +91,18 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.f.provider.summary_fail=True;c=self.chat();self.assertEqual(self.b.finish(self.a,c)['memory_status'],'failed')
         self.f.provider.summary_fail=False;self.assertEqual(self.b.summarize(c)['memory_status'],'ready')
         self.b.reset(self.t['id'],'reassure');c=self.b.start(self.a)['id'];self.assertEqual(self.b.state(self.a,c)['memories'],[])
+    def test_study_rating_gate_and_bulk_counts_on_postgres(self):
+        self.b.load_assignments([{'study_id':'P01','seq':1,'style':'guide','memory':'fresh','scenario':'A'}])
+        e=self.b.enroll();a=self.b.authenticate(self.b.login(e['code']))
+        self.b.consent(a,dict.fromkeys(['adult','mild','voluntary','data_consent'],True))
+        cid=self.b.start(a,'home',40)['id'];self.b.send(a,cid,'A mild deadline.',str(uuid.uuid4()));self.b.finish(a,cid)
+        with self.assertRaisesRegex(Error,'three questions'):self.b.start(a,'home',20)
+        self.b.rate(a,cid,{'post_distress':20,'support_needed':5,'felt_understood':6})
+        self.b.start(a,'home',30)
+        person=next(t for t in self.b.admin_state()['testers'] if t['id']==e['id'])
+        self.assertEqual(person['finished_chats'],{'first':0,'home':1,'final':0})
+        self.assertNotIn('active_style',person)
+        self.assertIn('P01',self.b.export_chats())
     def test_private_tables_and_rls(self):
         with self.b.storage.connect() as db:
             tables=db.execute('SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname=?',(self.schema,)).fetchall()

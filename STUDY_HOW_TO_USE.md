@@ -1,5 +1,7 @@
 # How to use the study chatbot
 
+> Current software instructions: [Team guide](docs/TEAM_GUIDE.md), [Participant guide](docs/PARTICIPANT_GUIDE.md), and [Data guide](docs/DATA_GUIDE.md). This earlier guide records study instructions; use the approved protocol to resolve schedule/material differences.
+
 Part A is for the research team. Part B is for participants (you can copy it into the information sheet or a message).
 
 ---
@@ -91,7 +93,7 @@ If someone wants to use the chatbot on a lab device instead of their own: in `/a
 ## A9. Withdrawal and data
 
 - Withdrawal: `/admin` → **Data downloads and deletion** → choose the person → type `DELETE TESTER`. This removes all their chats, notes and ratings. Their study ID is not reused.
-- Analysis download: **One row per chat (CSV)**. Full backup: **All records (JSON)**. Both contain conditions: store privately and never share with the blind coders.
+- Analysis download: **One row per chat (CSV)**. Full record export: **All records (JSON)** (not an automatic database restore). Both contain conditions: store privately and never share with the blind coders.
 - Main measures in the CSV: `distress_change` (after − before; negative = feeling better), `support_needed`, `felt_understood`, number of `home` chats per person (voluntary use), `notes_used` (memory actually given to the model).
 
 ## A9b. Putting the data together for analysis
