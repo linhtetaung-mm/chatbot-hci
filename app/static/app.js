@@ -18,8 +18,9 @@ function support(){const clean=s=>esc(String(s||'').replace(/[.\s]+$/,''));retur
 
 function login(){document.querySelector('#logout').hidden=true;root.innerHTML=`<h1>${isAdmin?'Researcher sign in':'Welcome'}</h1><p class="muted">${isAdmin?'Use the ADMIN_KEY from your private settings (Render Environment or local .env).':'Enter the access code you received from the research team.'}</p><form id="login"><label for="code">${isAdmin?'Researcher secret':'Access code'}</label><input id="code" name="code" type="${isAdmin?'password':'text'}" autocomplete="off" autocapitalize="characters" required maxlength="200"><button>Sign in</button></form>`;document.querySelector('#login').onsubmit=async ev=>{ev.preventDefault();try{await api('login',{code:ev.target.code.value,admin:isAdmin});await load()}catch(e){announce(e.message)}}}
 async function load(){try{if(isAdmin){await adminPage();return}
-  state=await api('state');if(!current&&state.open_conversation)setCurrent(state.open_conversation);
-  if(current)state=await api('state?conversation_id='+encodeURIComponent(current));
+  // One request when the chat is already known (faster after each message); a second only to resume an open chat.
+  state=await api('state'+(current?'?conversation_id='+encodeURIComponent(current):''));
+  if(!current&&state.open_conversation){setCurrent(state.open_conversation);state=await api('state?conversation_id='+encodeURIComponent(current))}
   document.querySelector('#logout').hidden=false;render()}
  catch(e){if(e.message==='Please sign in.')login();else if(e.message==='Conversation unavailable.'){setCurrent(null);await load()}else announce(e.message)}}
 function render(){root.innerHTML=`<h1>Chatbot</h1>${banner(state.mode,state.storage_mode)}`;
@@ -35,15 +36,21 @@ function render(){root.innerHTML=`<h1>Chatbot</h1>${banner(state.mode,state.stor
  const unfinished=state.messages.find(m=>m.role==='user'&&m.status!=='success');const need=state.min_messages||1;const enough=state.turns>=need;
  append(`<div class="messages" aria-live="polite">${state.messages.map(m=>`<div class="message ${m.role==='user'?'user':''} ${m.status!=='success'?'failed':''}"><span class="speaker">${m.role==='user'?'You':'Chatbot'}${m.status!=='success'?' · not answered':''}</span>${esc(m.text)}</div>`).join('')}</div>`);
  append(`<form id="send" class="composer"><label class="sr-only" for="text">Your message</label><textarea id="text" maxlength="1500" rows="2" placeholder="Type your message…" ${unfinished?'disabled':''} required></textarea><button ${unfinished||state.turns>=20?'disabled':''}>Send</button></form>${unfinished?'<p class="error">Your last message has no reply yet. <button class="text-button" id="retry">Try again</button></p>':''}<div class="chat-actions"><button id="finish" ${unfinished||!enough?'disabled':''}>Finish chat</button><button id="stop" class="danger">Stop</button></div>${need>1&&!enough?`<p class="help">In this session, please send at least ${need} messages before finishing (${state.turns} so far).</p>`:''}${state.turns>=18?'<p class="help">This chat is near its 20-message limit. Please finish it soon.</p>':''}${support()}`);
- document.querySelector('#send').onsubmit=ev=>{ev.preventDefault();send(document.querySelector('#text').value,crypto.randomUUID())};
+ document.querySelector('#send').onsubmit=ev=>{ev.preventDefault();const t=document.querySelector('#text').value;if(t.trim())send(t,crypto.randomUUID())};
  document.querySelector('#text').onkeydown=ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing){ev.preventDefault();document.querySelector('#send').requestSubmit()}};
- if(unfinished)document.querySelector('#retry').onclick=()=>send(unfinished.text,unfinished.request_id);
+ if(unfinished)document.querySelector('#retry').onclick=()=>send(unfinished.text,unfinished.request_id,true);
  document.querySelector('#finish').onclick=()=>act('finish');
  document.querySelector('#stop').onclick=()=>{if(confirm('Stop this chat now? It will not be continued.'))act('stop',{},true)};
  const box=document.querySelector('.messages');box.scrollTop=box.scrollHeight}
 async function startChat(pre){if(busy)return;busy=true;thanks=false;try{const r=await api('action',{action:'start',chat_type:visit,pre_distress:pre});setCurrent(r.id);await load()}catch(e){announce(e.message);await load()}finally{busy=false}}
 async function rate(v){if(busy)return;if(v.support_needed===null||v.felt_understood===null){announce('Please answer each question.');return}busy=true;try{await api('action',{action:'rate',conversation_id:state.pending_rating,...v});thanks=true;visit='home';setCurrent(null);await load()}catch(e){announce(e.message);await load()}finally{busy=false}}
-async function send(text,id){if(busy)return;busy=true;const b=document.querySelector('#send button');if(b){b.disabled=true;b.textContent='Replying…'}try{const r=await api('action',{action:'send',conversation_id:current,text,request_id:id});if(r.safety)announce('This chat has been paused. Please use the support contacts shown.');await load()}catch(e){announce(e.message);await load()}finally{busy=false}}
+// Show the participant's message at once, with a "typing" bubble, while the reply is written.
+function showPending(text,retry){const box=document.querySelector('.messages');if(!box)return;
+ box.insertAdjacentHTML('beforeend',(retry?'':`<div class="message user"><span class="speaker">You</span>${esc(text.trim())}</div>`)+'<div class="message typing" id="typing" aria-label="The chatbot is typing"><span class="speaker">Chatbot</span><span class="dots" aria-hidden="true"><span></span><span></span><span></span></span></div>');
+ box.scrollTop=box.scrollHeight;
+ const input=document.querySelector('#text');if(input){input.value='';input.disabled=true}
+ for(const el of document.querySelectorAll('#send button,#finish,#retry'))el.disabled=true}
+async function send(text,id,retry=false){if(busy)return;busy=true;showPending(text,retry);try{const r=await api('action',{action:'send',conversation_id:current,text,request_id:id});if(r.safety)announce('This chat has been paused. Please use the support contacts shown.');await load()}catch(e){announce(e.message);await load()}finally{busy=false}}
 async function act(action,data={},interrupt=false){if(busy&&!interrupt)return;busy=true;if(action==='finish'){const b=document.querySelector('#finish');if(b){b.disabled=true;b.textContent='Saving…'}}try{const r=await api('action',{action,conversation_id:current,...data});if(['finish','stop'].includes(action))setCurrent(null);if(r.warning&&!state.participant)announce(r.warning);await load()}catch(e){announce(e.message);await load()}finally{busy=false}}
 async function adminPage(){const s=await api('admin/state');document.querySelector('#logout').hidden=false;
  const label=t=>t.study_id?esc(t.study_id):'TEST '+esc(t.id.slice(0,7));

@@ -103,3 +103,43 @@ New researcher download **One row per chat (CSV)** (`/api/admin/export_chats`): 
 - The candidate v4 prompts in `experiment-readiness-2026-11-09/` are still not active.
 - The PostgreSQL changes could not be run here (no database driver offline); they are covered by the GitHub Actions tests and by `tools/database.py self-test`. Run both before deploying.
 - Supabase + Render deployment, Google Forms (baseline/final), consent approval and the pilot are separate tasks.
+
+---
+
+# Update, 10 November 2026 (evening): less repetitive chatbot and analysis tool
+
+## 12. Prompts version 5 (`study-v5-variety-2026-11-10`)
+
+**Why:** in testing, replies felt scripted: every reply acknowledged a feeling, then commented, then asked a question, at the same length each time, and sentences from the built-in examples came back word for word.
+
+| Before | Now |
+|---|---|
+| "Normally offer one specific follow-up" in every reply | A question in at most about half of the replies; never questions in three replies in a row; an observation or gentle invitation also keeps the chat going |
+| 2–4 sentences, under 80 words | Match the user's length: 1–2 sentences for a short message, never more than 3 sentences or about 60 words (shorter replies also arrive faster) |
+| No rule against repetition | New VARIETY rule: no two replies opening the same way, no reused sentence or question in a chat, acknowledge a feeling only when it is new or important, never copy the example wording |
+| Reassure: one fixed pattern (acknowledge, comfort, ask) | Rotates between kinds of comfort: validate, normalise, acknowledge described effort, warmth and presence, one small comfort to do now, gentle encouragement |
+| Guide: a short checklist (other explanation, evidence, control, next step) | Rotates between reflective moves: reflect their words, notice something, another possible explanation, what they would tell a friend, what helped before, what is in their control, one small next step; after two questions in a row, a short summary without a question |
+| 6 examples per style on bad day / exam / friend not replying, with the same openings in both styles | 3 examples per style on roommate noise, a group project, homesickness; each style opens differently; some replies have no question |
+| A Guide example practised "what else might explain the delay?" for a friend not replying, almost the same as final Scenario A | Removed, so the chatbot does not rehearse the test scenarios (Scenario A: friend not replying; Scenario B: supervisor feedback) |
+| One fixed greeting every chat | One of four greetings picked at random; the same set for every condition, and none mentions earlier chats |
+
+Unchanged: what makes the styles different (Reassure never asks the user to rethink and never agrees that the other person was wrong; Guide never supplies the answer), memory rules, safety reply. Replies over 60 words are now flagged `over_60_words` in the records.
+
+**Before the pilot:** repeat the prompt check with the four test accounts (2–3 chats each), then freeze this version.
+
+Files: `app/prompts.json`, `app/chatbot.py`.
+
+## 13. Analysis tool `tools/combine_data.py`
+
+Combines the chatbot download with the two Google Forms into two tables that open in Excel:
+
+- `blind`: makes the coders' file from the Final form (random code, scenario letter, answer; no study ID or condition) and a private key file.
+- `combine`: produces `chat_level.csv` (one row per finished chat, for H1) and `person_level.csv` (one row per participant: averages of the after-chat ratings, number of home chats, all Baseline and Final answers, and the agreed scenario score, for H2–H6). It prints Cohen's kappa for the coders, study IDs that are missing or mistyped in the forms, and averages per condition. Study IDs typed as `p7` or `P 07` are read as `P07`.
+
+## Tests
+
+120 tests; new ones check the greeting set and the ID matching in the analysis tool.
+
+## 14. "Typing…" bubble (10 November, late)
+
+The participant's message now appears the moment they press Send, with an animated "typing" bubble from the chatbot until the reply arrives. The message box, Send and Finish are disabled while waiting; Stop still works. After each message the page makes one request instead of two. Server code is unchanged. Files: `app/static/app.js`, `app/static/style.css`.

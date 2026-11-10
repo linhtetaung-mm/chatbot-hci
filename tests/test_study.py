@@ -82,4 +82,12 @@ class StudyTests(unittest.TestCase):
         sys.argv=['x'];src=Path('tools/assignments.py').read_text().split('p=argparse.ArgumentParser')[0];ns={'__file__':'tools/assignments.py'};exec(src,ns)
         rows=ns['generate'](48,11,'P')
         for i in range(0,48,4):self.assertEqual(len({(r['style'],r['memory']) for r in rows[i:i+4]}),4)
+    def test_greeting_comes_from_the_same_set_for_every_condition(self):
+        from app.chatbot import GREETINGS
+        for _ in range(4):
+            e,a=self.participant();cid=self.bot.start(a,'home',20)['id'];self.assertIn(self.bot.state(a,cid)['messages'][0]['text'],GREETINGS)
+    def test_combine_tool_normalises_ids(self):
+        src=Path('tools/combine_data.py').read_text().split('p=argparse.ArgumentParser')[0];ns={'__file__':'tools/combine_data.py'};exec(src,ns)
+        for raw in ['p7','P07',' P 07','p007']:self.assertEqual(ns['norm_id'](raw),'P07')
+        self.assertAlmostEqual(ns['kappa']([0,1,2,3],[0,1,2,3]),1.0)
 if __name__=='__main__':unittest.main()

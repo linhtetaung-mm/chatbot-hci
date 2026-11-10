@@ -5,7 +5,9 @@ from .storage import create_storage
 from .limits import UsageLimits
 from .provider import Provider,ProviderError,validate_notes,SAFETY_RESPONSE
 PROMPTS=json.loads(Path(__file__).with_name('prompts.json').read_text())
-GREETING="Hi, I’m here to listen. What’s been on your mind lately?"
+# Same small set for every condition, picked at random, so returning participants do not see one fixed line.
+GREETINGS=("Hi, I’m here to listen. What’s on your mind today?","Hello! How has your day been?","Hi there. Is there anything you’d like to talk through?","Welcome. What would you like to talk about today?")
+GREETING=GREETINGS[0]
 STYLES=('reassure','guide')
 MEMORY=('persistent','fresh')
 CHAT_TYPES=('first','home','final')
@@ -156,7 +158,7 @@ class Chatbot:
                 if self.temporary:db.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(counter_key,str(created+1)))
                 refs=[r['id'] for r in reversed(rows)];cid=uid('C');prompt_json=json.dumps(PROMPTS,sort_keys=True)
                 db.execute('INSERT INTO conversations VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,t['id'],auth['style'],'open',time.time(),None,self.cfg['model'],digest(prompt_json),prompt_json,json.dumps(refs)))
-                db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,model) VALUES(?,?,?,?,?,?,?,?)',(cid,0,'assistant',GREETING,'success','opening',time.time(),'FIXED_GREETING'))
+                db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,model) VALUES(?,?,?,?,?,?,?,?)',(cid,0,'assistant',secrets.choice(GREETINGS),'success','opening',time.time(),'FIXED_GREETING'))
                 db.execute('INSERT INTO chat_meta(conversation_id,chat_type,pre_distress) VALUES(?,?,?)',(cid,chat_type,pre_distress))
                 if skipped and t['memory']!='fresh':self.event(db,t['id'],cid,'memory_not_ready_skipped',json.dumps(skipped))
                 self.event(db,t['id'],cid,'conversation_started',json.dumps(refs));return {'id':cid,'resumed':False}
@@ -225,7 +227,7 @@ class Chatbot:
                 if SAFETY_RESPONSE.replace('’', "'").casefold() in reply['text'].replace('’', "'").casefold() or 'beyond what this chatbot can support' in reply['text'].casefold():
                     db.execute('UPDATE testers SET suspended=1 WHERE id=?',(c['tester_id'],));db.execute("UPDATE conversations SET status='stopped',ended=? WHERE tester_id=? AND status='open'",(time.time(),c['tester_id']));self.event(db,c['tester_id'],cid,'model_safety_stop');return {'stopped':True,'safety':True}
                 seq=db.execute('SELECT MAX(seq)+1 FROM messages WHERE conversation_id=?',(cid,)).fetchone()[0]
-                flags='over_80_words' if len(reply['text'].split())>=80 else ''
+                flags='over_60_words' if len(reply['text'].split())>60 else ''
                 db.execute("UPDATE messages SET status='success' WHERE conversation_id=? AND request_id=? AND role='user'",(cid,request_id))
                 db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,model,usage,flags) VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,seq,'assistant',reply['text'],'success',request_id,time.time(),reply['model'],json.dumps(reply.get('usage',{})),flags))
                 self.event(db,c['tester_id'],cid,'reply_saved',json.dumps([n['memory_id'] for n in notes]));return {'ok':True}

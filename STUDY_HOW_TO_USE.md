@@ -94,6 +94,15 @@ If someone wants to use the chatbot on a lab device instead of their own: in `/a
 - Analysis download: **One row per chat (CSV)**. Full backup: **All records (JSON)**. Both contain conditions: store privately and never share with the blind coders.
 - Main measures in the CSV: `distress_change` (after − before; negative = feeling better), `support_needed`, `felt_understood`, number of `home` chats per person (voluntary use), `notes_used` (memory actually given to the model).
 
+## A9b. Putting the data together for analysis
+
+1. Download from the researcher page: **One row per chat (CSV)** → save as `chats.csv`. From each Google Form's sheet: **File → Download → CSV** → `baseline.csv` and `final.csv`.
+2. Make the coders' file: `python3 tools/combine_data.py blind --final final.csv`. Give **only** `private/analysis/coders_scenarios.csv` to the two coders. They add the columns `coder1`, `coder2` (independent 0–3 scores) and `final` (agreed score) and send it back, e.g. as `scored.csv`.
+3. Combine: `python3 tools/combine_data.py combine --chats chats.csv --baseline baseline.csv --final final.csv --scores scored.csv`.
+4. Use `private/analysis/chat_level.csv` for H1 (every chat) and `private/analysis/person_level.csv` for H2–H6 (one row per person). Fix any study ID the tool lists under CHECK before analysing.
+
+In both forms, make the Study ID question required with response validation (regular expression `^[Pp] ?\d{1,2}$`) so IDs match.
+
 ## A10. Common problems
 
 | Problem | What to do |
