@@ -79,6 +79,8 @@ class Chatbot:
         return {'added':added,'first':rows[0]['study_id'],'last':rows[-1]['study_id']}
     def enroll(self):
         """Give the next unused study ID, in list order, to a new participant. The condition is locked."""
+        if self.temporary:
+            raise Error('Participant enrollment needs persistent storage. Use a test account for a temporary preview.',409)
         with self.storage.connect() as db:
             db.begin_serialized()
             a=db.execute('SELECT * FROM assignments WHERE assigned IS NULL ORDER BY seq LIMIT 1').fetchone()
@@ -91,6 +93,16 @@ class Chatbot:
     def token(self,db,tid,role,style):
         token=secrets.token_urlsafe(32)
         db.execute('INSERT INTO logins VALUES(?,?,?,?,?)',(digest(token),tid,role,style,time.time()+3600*self.cfg.get('session_hours',168)));return token
+    def reissue_code(self,tid):
+        """Replace a lost login code without re-enrollment, condition changes or data loss."""
+        code=new_code()
+        with self.storage.connect() as db:
+            t=db.execute('SELECT id,study_id FROM testers WHERE id=?',(tid,)).fetchone()
+            if not t:raise Error('Unknown tester.',404)
+            db.execute('UPDATE testers SET code_hash=? WHERE id=?',(digest(normalize_code(code)),tid))
+            db.execute("DELETE FROM logins WHERE tester_id=? AND role='tester'",(tid,))
+            self.event(db,tid,None,'access_code_reissued')
+            return {'id':tid,'study_id':t['study_id'],'code':code}
     def login(self,code,admin=False):
         if not isinstance(code,str) or len(code)>200:raise Error('Invalid access code.',401)
         with self.storage.connect() as db:
@@ -144,7 +156,10 @@ class Chatbot:
             if row:notes.append({'memory_id':row['id'],'completed_at':row['ended'],'notes':json.loads(row['notes'])})
         return notes
     def retry_pending_summaries(self,auth):
-        """Before a new chat, retry recent failed/pending notes once. Never blocks the participant."""
+        """Before a new chat, retry recent failed/pending notes once. Failures do not prevent starting.
+
+        Retries are synchronous and can take time; resuming an open chat does not run them.
+        """
         if self.temporary:return
         with self.storage.connect() as db:
             rows=db.execute("SELECT c.id FROM conversations c JOIN memories m ON m.conversation_id=c.id WHERE c.tester_id=? AND c.style=? AND c.status='completed' AND m.status IN ('pending','failed') ORDER BY c.ended DESC LIMIT 3",(auth['tester_id'],auth['style'])).fetchall()
@@ -154,14 +169,18 @@ class Chatbot:
     def start(self,auth,chat_type='home',pre_distress=None):
         if chat_type not in CHAT_TYPES:raise Error('Unknown chat type.')
         if pre_distress is not None:scale(pre_distress,0,100,'Choose how upset you feel, from 0 to 100.')
-        self.retry_pending_summaries(auth)
         with self.lock('start:'+auth['tester_id']+auth['style']):
             with self.storage.connect() as db:
                 t=self.tester(db,auth)
                 if not t['consent']:raise Error('Please complete consent first.',409)
                 old=db.execute("SELECT id FROM conversations WHERE tester_id=? AND style=? AND status='open'",(t['id'],auth['style'])).fetchone()
                 if old:return {'id':old[0],'resumed':True}
+                if t['locked'] and db.execute("SELECT 1 FROM conversations c JOIN chat_meta x ON x.conversation_id=c.id WHERE c.tester_id=? AND c.status='completed' AND x.rated IS NULL",(t['id'],)).fetchone():
+                    raise Error('Please submit the three questions from your finished chat before starting another.',409)
                 if t['locked'] and pre_distress is None:raise Error('Please answer how upset you feel before starting.')
+            self.retry_pending_summaries(auth)
+            with self.storage.connect() as db:
+                t=self.tester(db,auth)
                 # Last three finished chats whose notes are ready. A note that is still failing is skipped and logged,
                 # so a participant at home is never blocked. Fresh memory receives no earlier notes at all.
                 rows=db.execute("SELECT m.id,m.status FROM conversations c JOIN memories m ON m.conversation_id=c.id WHERE c.tester_id=? AND c.style=? AND c.status='completed' AND m.status!='excluded' ORDER BY c.ended DESC,c.id DESC LIMIT 3",(t['id'],auth['style'])).fetchall()
@@ -370,11 +389,12 @@ class Chatbot:
     def admin_state(self):
         with self.storage.connect() as db:
             testers=[]
+            finished={}
+            for c in db.execute("SELECT c.tester_id,x.chat_type,count(*) AS n FROM conversations c JOIN chat_meta x ON x.conversation_id=c.id WHERE c.status='completed' GROUP BY c.tester_id,x.chat_type").fetchall():
+                finished.setdefault(c['tester_id'],{})[c['chat_type']]=c['n']
             for r in db.execute('SELECT id,created,consent,active_style,suspended,study_id,memory,locked FROM testers ORDER BY created').fetchall():
                 row=dict(r)
-                counts={k:0 for k in CHAT_TYPES}
-                for c in db.execute("SELECT x.chat_type,count(*) AS n FROM conversations c JOIN chat_meta x ON x.conversation_id=c.id WHERE c.tester_id=? AND c.status='completed' GROUP BY x.chat_type",(row['id'],)).fetchall():counts[c['chat_type']]=c['n']
-                row['finished_chats']=counts
+                row['finished_chats']={k:finished.get(row['id'],{}).get(k,0) for k in CHAT_TYPES}
                 if row['locked']:row.pop('active_style');row.pop('memory')  # condition stays concealed on screen; it is in the export
                 testers.append(row)
             unused=db.execute('SELECT count(*) FROM assignments WHERE assigned IS NULL').fetchone()[0]
@@ -400,9 +420,10 @@ class Chatbot:
         out=io.StringIO();w=csv.writer(out);w.writerow(self.CHAT_COLUMNS)
         with self.storage.connect() as db:
             safety={r['conversation_id'] for r in db.execute("SELECT conversation_id FROM events WHERE event IN ('safety_keyword_stop','model_safety_stop')").fetchall()}
+            message_counts={r['conversation_id']:r['n'] for r in db.execute("SELECT conversation_id,count(*) AS n FROM messages WHERE role='user' AND status='success' AND flags!='memory_correction' GROUP BY conversation_id").fetchall()}
             rows=db.execute('SELECT c.*,t.study_id,t.memory,t.locked,x.chat_type,x.pre_distress,x.post_distress,x.support_needed,x.felt_understood FROM conversations c JOIN testers t ON t.id=c.tester_id LEFT JOIN chat_meta x ON x.conversation_id=c.id ORDER BY t.study_id,c.started').fetchall()
             for r in rows:
-                n=db.execute("SELECT count(*) FROM messages WHERE conversation_id=? AND role='user' AND status='success' AND flags!='memory_correction'",(r['id'],)).fetchone()[0]
+                n=message_counts.get(r['id'],0)
                 change=r['post_distress']-r['pre_distress'] if r['post_distress'] is not None and r['pre_distress'] is not None else ''
                 w.writerow([blank(r['study_id']),r['tester_id'],0 if r['locked'] else 1,r['style'],r['memory'],r['id'],blank(r['chat_type']),r['status'],iso(r['started']),iso(r['ended']),round((r['ended']-r['started'])/60,1) if r['ended'] else '',n,len(json.loads(r['memory_refs'])),
                             blank(r['pre_distress']),blank(r['post_distress']),change,blank(r['support_needed']),blank(r['felt_understood']),1 if r['id'] in safety else 0,r['prompt_version'][:12],r['model']])

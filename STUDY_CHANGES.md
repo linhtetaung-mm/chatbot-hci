@@ -1,5 +1,7 @@
 # Study version: what changed
 
+> Historical record. For the current software, use the [team guide](docs/TEAM_GUIDE.md), [participant guide](docs/PARTICIPANT_GUIDE.md) and [engineering review with verified results](docs/ENGINEERING_REVIEW.md). Approved study materials remain authoritative for protocol decisions.
+
 Branch `study-version`, changes made on 10 November 2026, compared with the previous version (`master`, commit `43a8399`).
 
 **Why:** the previous app was a team prototype with two named chatbots. The study needs a 2×2 between-participant experiment: each participant gets one fixed condition (support style Reassure/Guide × memory Persistent/Fresh), sees the same neutral chatbot as everyone else, chats as often as they like for a few days between two guided sessions, and rates every chat.

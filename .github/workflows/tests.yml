@@ -1,4 +1,6 @@
 name: Chatbot checks
+permissions:
+  contents: read
 on:
   push:
   pull_request:
@@ -29,3 +31,21 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: node --check app/static/app.js
+  browser:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: npm install --prefix "$RUNNER_TEMP/hci-browser" playwright@1.65.0
+      - run: '"$RUNNER_TEMP/hci-browser/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}'
+      - run: node tools/browser_check.cjs
+        env:
+          HCI_TEST_PYTHON: python
+          NODE_PATH: ${{ runner.temp }}/hci-browser/node_modules
+          HCI_BROWSER: ${{ matrix.browser }}

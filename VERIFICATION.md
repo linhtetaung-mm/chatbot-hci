@@ -1,5 +1,7 @@
 # CI password-authentication fix and Render guide — 9 November 2026
 
+> Historical record. For the current software, use the [team guide](docs/TEAM_GUIDE.md), [participant guide](docs/PARTICIPANT_GUIDE.md) and [engineering review with verified results](docs/ENGINEERING_REVIEW.md). Approved study materials remain authoritative for protocol decisions.
+
 - Reproduced the restricted-role integration test failure against password-enforcing local PostgreSQL: role creation used the SQL template password while the connection used `test-only`. Earlier trust-authenticated local tests concealed the mismatch. Fixed the synthetic password substitution; all 109 tests now pass with password authentication enabled and no skips.
 - Updated GitHub Actions checkout to v5 and setup-python to v6 to use their Node 24 runtimes. The screenshot's exact run traceback was not accessible; a new push/check run is needed to confirm that specific CI failure is resolved.
 - Added `DEPLOY_RENDER_SUPABASE.md` and optional `render.supabase.yaml`. The guide uses Render Secret Files and `/etc/secrets/prod-ca-2021.crt`; no private Mac directory or real credentials belong in GitHub Actions.

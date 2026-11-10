@@ -88,6 +88,16 @@ class DeploymentTests(unittest.TestCase):
     def test_health_no_secret_and_no_paid_requests(self):
         self.hosted();r=self.request('example.onrender.com','',method='GET',path='/health')
         self.assertEqual(r['status'],200);self.assertEqual(json.loads(r['body']),{'ok':True,'mode':'demo'});self.assertEqual(self.f.provider.calls,[])
+    def test_interface_and_health_do_not_wait_for_database(self):
+        def request(path,host='127.0.0.1:8766'):
+            result={}
+            def start(status,headers):result.update(status=int(status.split()[0]),headers=dict(headers))
+            result['body']=b''.join(server.application({'PATH_INFO':path,'REQUEST_METHOD':'GET','HTTP_HOST':host},start))
+            return result
+        with patch.object(server,'bot',None),patch.object(server,'configuration',return_value=self.bot.cfg),patch.object(server,'get_bot',side_effect=AssertionError('Must not open database')):
+            for path in ('/','/admin','/app.js','/style.css','/health'):
+                self.assertEqual(request(path)['status'],200)
+            self.assertEqual(request('/','evil.invalid')['status'],403)
     def test_render_configuration_rejects_missing_disk(self):
         values={'ADMIN_KEY':'test-admin-secret-at-least-24-characters','DEPLOYMENT':'render','STORAGE_MODE':'persistent','CHATBOT_MODE':'setup','RENDER_EXTERNAL_HOSTNAME':'example.onrender.com','CHATBOT_DB':'/var/data/test.sqlite3'}
         with patch('app.config.load_env'),patch.dict(os.environ,values,clear=True),patch('app.config.Path.is_mount',return_value=False):

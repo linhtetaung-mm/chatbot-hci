@@ -30,14 +30,16 @@ def application(env,start):
         if env.get('PATH_INFO')=='/health' and env.get('REQUEST_METHOD')=='GET':
             import os
             return reply({'ok':True,'mode':bot.cfg['mode'] if bot else os.getenv('CHATBOT_MODE','setup')})
-        service=get_bot()
-        if service.cfg.get('secure_cookie'):headers.append(('Strict-Transport-Security','max-age=31536000'))
+        # Paint the interface even if database startup is slow or unavailable. API errors then
+        # appear as a readable notice instead of replacing the whole page with raw JSON.
+        cfg=bot.cfg if bot is not None else configuration()
+        if cfg.get('secure_cookie'):headers.append(('Strict-Transport-Security','max-age=31536000'))
         path=env.get('PATH_INFO','/');method=env.get('REQUEST_METHOD','GET');data={}
         host=env.get('HTTP_HOST','')
-        if host!=service.cfg.get('allowed_host',urlsplit(service.cfg['origin']).netloc):raise Error('Request host rejected.',403)
+        if host!=cfg.get('allowed_host',urlsplit(cfg['origin']).netloc):raise Error('Request host rejected.',403)
         if path in ('/','/admin','/app.js','/style.css') and method=='GET':
             f=ROOT/('index.html' if path in ('/','/admin') else path[1:]);return reply(f.read_bytes(),ctype='text/html; charset=utf-8' if f.suffix=='.html' else 'text/javascript; charset=utf-8' if f.suffix=='.js' else 'text/css; charset=utf-8')
-        if path=='/health' and method=='GET':return reply({'ok':True,'mode':service.cfg['mode']})
+        service=get_bot()
         if method not in ('GET','POST'):raise Error('Unsupported request method.',400)
         if method=='POST':
             if env.get('HTTP_ORIGIN')!=service.cfg['origin'] or env.get('HTTP_X_CHATBOT_REQUEST')!='1':raise Error('Request origin rejected.',403)
@@ -73,6 +75,9 @@ def application(env,start):
             if path=='/api/admin/enroll' and method=='POST':return reply(service.enroll())
             if path=='/api/admin/add_ids' and method=='POST':return reply(service.add_study_ids(data.get('count'),data.get('prefix') or 'P'))
             if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style') or None));return reply({'ok':True})
+            if path=='/api/admin/reissue' and method=='POST':
+                if data.get('confirmation')!='REPLACE CODE':raise Error('Type REPLACE CODE to confirm.')
+                return reply(service.reissue_code(data.get('tester_id','')))
             if path=='/api/admin/inspect' and method=='POST':return reply(service.inspect(data.get('conversation_id','')))
             if path=='/api/admin/retry' and method=='POST':return reply(service.summarize(data.get('conversation_id','')))
             if path=='/api/admin/reset' and method=='POST':

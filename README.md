@@ -1,154 +1,69 @@
-# Reassure and Guide — Phase 1 chatbot
+# Reassure or Guide — study chatbot
 
-> **Study version (10 November 2026, branch `study-version`):** neutral chatbot, locked 2×2 assignment, Persistent/Fresh memory, in-app ratings and chat types. See [STUDY_CHANGES.md](STUDY_CHANGES.md) for what changed and [STUDY_HOW_TO_USE.md](STUDY_HOW_TO_USE.md) for how the team and participants use it. Where this README disagrees with those two files, follow them.
+A small research application for the **Reassure/Guide × Persistent/Fresh memory** experiment. Participants see the same neutral **Chatbot** interface and keep one locked condition. Python serves the interface and API; storage can be local SQLite, temporary RAM, or Supabase PostgreSQL.
 
-Two distinct chatbot styles. The current default is a temporary team preview; optional persistent mode keeps separate memories for each tester and style. This folder contains the local interface, SQLite storage, OpenAI Responses API adapter, prompts, tests and operating instructions. Local SQLite/RAM modes use Python 3.10+ and the standard library; Supabase also requires the installed PostgreSQL driver. Render uses Gunicorn (included in requirements.txt).
+This cleanup preserves the active prompts, model configuration, assignment rules, questionnaire wording, message limits and visit types. It does not resolve differences between earlier proposals and later study documents. Use the team's approved protocol for recruitment, visit dates, required chats and analysis decisions.
 
-**Current status — 4 November 2026:** the project owner confirms Live AI testing of both styles with an API key. Only team testing has taken place. Phase 1 still needs a recorded review of the latest prompts and live memory, followed by at least one external supervised usability test. See [the current task guide](docs/PROJECT_TASK_GUIDE.md) and [the audit](docs/PHASE1_AUDIT.md).
+## Start here
 
-**Hosting update — 7 November 2026:** Free temporary Render configuration, private access and process-local quotas are implemented and locally tested. Optional persistent mode is retained. See [deployment verification](VERIFICATION.md). A Render deployment and live hosted acceptance test remain to be done.
+| Reader | Guide |
+|---|---|
+| Team running the project | [Team guide](docs/TEAM_GUIDE.md): setup, practice, sessions, troubleshooting and handover |
+| Participants | [Participant guide](docs/PARTICIPANT_GUIDE.md): sign in, chat, finish, retry and get help |
+| Project lead / report writer | [Success criteria](docs/SUCCESS_CRITERIA.md): what counts as a successful project and what the measures support |
+| Analyst | [Data guide](docs/DATA_GUIDE.md): exports, blind coding, missing records and analysis limits |
+| Developer / reviewer | [Engineering review](docs/ENGINEERING_REVIEW.md): changes, checks and remaining limitations |
 
-## Supabase database support — 9 November 2026
+## Run locally
 
-Follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md). The app now supports Supabase PostgreSQL using a private schema, verified TLS and the IPv4 Session pooler. Select `DATABASE_BACKEND=supabase` with `STORAGE_MODE=persistent`, fill the private `.env` placeholder, install requirements and run the explicit schema setup/check tools. Existing API settings and local databases are preserved. No hosting choice is required to use it locally.
-
-The earlier review's “connector not implemented” finding is superseded by this backend update. Fixed experimental assignment, visit stages, questionnaires, full study consent and actual Supabase acceptance testing remain separate tasks. The prompt candidates have not been activated by this change.
-
-## Deploy Supabase-backed app on Render
-
-Use [DEPLOY_RENDER_SUPABASE.md](DEPLOY_RENDER_SUPABASE.md). Supply the downloaded certificate as a Render Secret File and set the server path `/etc/secrets/prod-ca-2021.crt`, not the Mac path. Automated GitHub tests use a disposable PostgreSQL database and do not need the Supabase certificate or real secrets.
-
-## Deploy for team testing on Render
-
-Follow [DEPLOY_RENDER.md](DEPLOY_RENDER.md). The included `render.yaml` sets up a free, temporary team preview with private environment settings and no disk. Setup mode is the initial default; enable live mode after completing the documented checks. No API key or existing tester data is included in deployment files.
-
-Hosting includes secure HTTPS cookies, exact host/origin checks, API-attempt quotas, an admin pause/resume switch, and remote chatbot assignment. Each tester needs a private access code. In temporary mode, quotas last only for the running process, and no memory summaries are generated. In persistent mode, limits include memory summaries and failed attempts across both styles. This is preparation for team testing, not completion of the four-condition experiment or approval for participant recruitment.
-
-## Current default: temporary team preview
-
-`STORAGE_MODE=temporary` is now the default. The storage interface uses an in-memory implementation: no chat database is written to disk. It keeps context within the current chat and clears the chat on Finish, Stop, sign-out or process restart. Closing a browser tab alone does not clear server RAM. Saved notes and record downloads are disabled. Researchers can inspect active chats; live messages still go to OpenAI.
-
-Tester codes, sessions, quotas and pause state exist only in server RAM and reset on restart/sleep. Use this for a short team demo, with fictional mild topics. Set provider spending controls separately. Existing on-disk records are left untouched and are not loaded by this mode.
-
-The persistent implementation remains available through explicit `STORAGE_MODE=persistent`; its paid Render example is `render.persistent.yaml`. Future database selection and migration are separate decisions. See [the architecture note](docs/TEMPORARY_STORAGE.md).
-
-## Start without an API key
-
-Open a terminal inside this folder:
+From this folder:
 
 ```sh
-python3 setup_local.py
-python3 run.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python setup_local.py
+python tools/preflight.py
+python run.py
 ```
 
-Run `setup_local.py` only the first time. It creates a private `.env` and random `ADMIN_KEY`; it refuses to overwrite existing settings. Open `.env` locally to copy the researcher secret. Visit **http://127.0.0.1:8766/admin**, sign in, create a tester, choose Reassure or Guide and open their screen.
+`setup_local.py` creates `.env` only if it does not exist. Keep an existing `.env`; never replace it with the example. By default, open [the researcher screen](http://127.0.0.1:8766/admin). Use the private `ADMIN_KEY` from your settings. The default port is 8766; use the address printed by the app if yours differs. The participant screen is `/`.
 
-The default is **setup mode**: the interface says OpenAI is not connected and disables sending. It does not fabricate replies or AI memories. Your private `.env` contains this explicit slot:
+| Setting | What it does |
+|---|---|
+| `CHATBOT_MODE=setup` | Inspect the interface; no chatbot responses or API calls |
+| `CHATBOT_MODE=demo` | Scripted responses for checking workflow; not suitable for evaluating chatbot quality |
+| `CHATBOT_MODE=live` | OpenAI responses; requires private API credentials and the existing human-test review settings |
+| `STORAGE_MODE=temporary` | Team preview in RAM; no saved memory, ratings or study enrollment |
+| `STORAGE_MODE=persistent` | Saved chats, ratings and memory summaries |
+| `DATABASE_BACKEND=sqlite` | Local files; useful for isolated practice |
+| `DATABASE_BACKEND=supabase` | Server-side PostgreSQL; requires persistent storage and verified TLS |
 
-```ini
-CHATBOT_MODE=setup
-OPENAI_API_KEY=PASTE_YOUR_OPENAI_API_KEY_HERE
-```
+The app loads `.env` without overriding environment variables already set by the host. **Changing a local file does not update Render's Environment settings.** Restart after configuration changes. Never upload `.env`, `private/`, database files or exports.
 
-That text is a placeholder, not a working credential. The code rejects it in live mode and never sends it to OpenAI. No need to create an account, spend money or supply a key just to inspect the interface.
+## Existing deployment and database instructions
 
-## Three modes
+Start with the current [commit, push and deploy checklist](docs/RELEASE_GUIDE.md). It covers the cleanup branch, merging into `v2`, local checks, private settings and hosted acceptance.
 
-| Mode | Purpose | API calls and records |
-|---|---|---|
-| `setup` | Inspect the app while waiting for a key | No AI replies or summaries. Separate `data/chatbots-setup.sqlite3`. |
-| `demo` | Explicitly exercise UI/storage with scripted examples | No API calls. Responses are simulated and can repeat; not suitable for evaluating support quality. Separate demo database. |
-| `live` | Real AI replies and summaries | Requires actual API key and human-test settings. Separate live database. |
+- [Supabase setup](SUPABASE_SETUP.md)
+- [Render with Supabase](DEPLOY_RENDER_SUPABASE.md)
+- [Temporary Render preview](DEPLOY_RENDER.md)
 
-Leave `CHATBOT_DB` blank for automatic mode separation. Do not point a different mode/model at an existing database: preserve it and choose a new filename. The update does not erase older demo records.
+Use one running app per Supabase schema and one Gunicorn worker. Keep development/pilot records separate from study records. `/health` checks whether the server is alive; a successful researcher sign-in and data read are also needed to check database readiness.
 
-## Connect real AI when you have a key
+## What memory means
 
-“ChatGPT API” here means the **OpenAI API**. Your ChatGPT subscription does not itself configure this application. Use the official API platform to create an API project, establish billing/budget and create a private key. See [official authentication guidance](https://developers.openai.com/api/reference/overview).
+Both conditions retain messages **within the current chat**. Persistent additionally receives validated notes from up to the last three eligible completed chats belonging to that participant and style. Fresh receives no earlier-chat notes. Both conditions' transcripts remain stored for research in persistent storage; “Fresh” does not mean deleting the data. First chats have no previous notes in either condition. Failed summaries are visible to researchers and can be retried; automatic retries before a new chat can add delay.
 
-Edit only the private `.env` file:
-
-```ini
-CHATBOT_MODE=live
-OPENAI_API_KEY=PASTE_YOUR_REAL_KEY_PRIVATELY_HERE
-OPENAI_MODEL=gpt-6-luna
-OPENAI_REASONING_EFFORT=none
-RESEARCHER_CONTACT=your actual contact
-SUPPORT_CONTACTS=verified local and campus support contacts
-HUMAN_TEST_REVIEW=confirmed
-```
-
-Replace the key placeholder with the real value; do not send it in chat or put it in source code, screenshots, GitHub or terminal commands. Confirm the applicable course review before setting `HUMAN_TEST_REVIEW=confirmed`, and check the local deletion date. The key is read server-side only.
-
-Use the same model for both styles. Confirm the selected model and settings are supported by your account before human testing; model availability is not guaranteed by this package. If another model lacks the reasoning setting, leave `OPENAI_REASONING_EFFORT` blank. There is no automatic model switch or canned fallback on API errors.
-
-Restart the terminal server with Ctrl+C, then:
+## Checks
 
 ```sh
-python3 tools/preflight.py
-python3 tools/check_api.py
-python3 tools/check_api.py --execute
-python3 run.py
+python -m unittest discover -s tests -v
+node --check app/static/app.js
 ```
 
-Preflight and the dry run make no network calls. **Only `--execute` makes six synthetic, potentially billable calls:** initial reply, structured summary and return-with-memory reply for each style. Results go to `private/api-check.json` for human review. A successful request is not proof of style fidelity, correct memories or Phase 1 completion.
+The suite uses synthetic providers and disposable records. PostgreSQL integration tests require `HCI_TEST_POSTGRES_URL` pointing to a **disposable loopback database**, never the study database. See the [engineering review](docs/ENGINEERING_REVIEW.md) for browser checks and the latest verified results. No frontend build is required to run the app.
 
-Reload the browser after a restart. Start a **New chat** for updated prompt versions. Existing conversations preserve their earlier prompt snapshots and records.
+## Historical material
 
-## How the chatbots work
-
-- **Reassure** is shown by name with a green accent: comfort and reassurance without a reappraisal exercise.
-- **Guide** is shown by name with a blue accent: warm questions that help the tester form their own perspective or next step.
-- Both lead the active conversation with a focused follow-up and simplify the next turn when the tester is unsure. Reassure stays with comfort; Guide helps the tester form their own perspective. They respect a goodbye or request to stop.
-- Both use the same model/interface, but different system style blocks. `app/prompts.json` contains shared system rules, style rules/examples, memory instructions and a separate summarizer prompt.
-- Requests explicitly preserve system, user and assistant roles. The latest message is passed unchanged. Saved notes are labelled untrusted context data, not instructions. Examples are illustrations, not invented user history.
-- A chat keeps current messages. Later chats receive notes from the same tester/style's last three eligible finished chats, oldest first. Other testers and the other style are excluded.
-- Notes distinguish situation, feelings, **user** insights and **bot** suggestions. Summary shape is checked; factual accuracy requires a human check in live mode.
-- Finish saves the conversation and generates notes. Failed summary jobs remain retryable. Stop/discard/empty chats do not produce recall notes. Corrections exclude the selected old note.
-- Main controls are Send, Finish chat and More. Previous chats and data tools are collapsed. The limit is 20 answered user messages per chat, 1,500 characters each.
-
-See [HOW_TO_USE.md](HOW_TO_USE.md) for the researcher/tester walkthrough and [memory/data details](docs/MEMORY_AND_DATA.md).
-
-## Files
-
-```text
-README.md / HOW_TO_USE.md       Setup and operation
-.env.example / setup_local.py   Safe private settings and key placeholder
-run.py / requirements.txt      Standard-library-only local launch
-app/config.py                  Mode, credentials and readiness checks
-app/provider.py                OpenAI Responses API, summaries and explicit demo
-app/prompts.json                Versioned system/style/memory/summary prompts
-app/storage.py / chatbot.py     SQLite, ownership and conversation lifecycle
-app/server.py / static/         Local API and simple interface
-local data/ and private/        Runtime records; never packaged
-
-docs/PROJECT_TASK_GUIDE.docx      Current detailed guide, progress and remaining experiment steps
-docs/PROJECT_TASK_GUIDE.md        Editable text of the same guide
-docs/PHASE1_AUDIT.md             Verified findings and remaining completion gates
-docs/API_SETUP.md               Short activation checklist
-docs/USABILITY_TEST_TEMPLATE.md  Blank form for the supervised human test
-docs/MEMORY_AND_DATA.md          Retrieval, correction, retention and privacy
-docs/CHATBOT_DESIGN.docx         Original design reference; current controls here
-VERIFICATION.md                 Actual software check record
-tests/test_chatbot.py            Automated workflow and boundary checks
-tools/                          Preflight, API check, backup and packaging
-MANIFEST.json                   Public file hashes
-```
-
-## Verify, back up and share
-
-```sh
-python3 -m unittest discover -s tests -v
-python3 tools/backup.py data/chatbots-live.sqlite3 private/backup-live-YYYY-MM-DD.sqlite3
-python3 tools/package.py
-```
-
-Choose a new dated backup filename; existing backups are not overwritten. The clean ZIP is generated beside this folder. It excludes private settings, records, exports and caches. Run `setup_local.py` after extracting on a new computer to create new private settings.
-
-A virtual environment is optional; there are no external dependencies. If desired, use `python3 -m venv .venv` then `source .venv/bin/activate` on macOS/Linux. On Windows use `.venv\Scripts\activate` and, if needed, `py` instead of `python3`.
-
-## Scope and privacy
-
-This phase runs on the researcher laptop only. A localhost link will not give someone on another device access to your computer. Public deployment and the multi-participant experiment remain Phase 2; do not expose this HTTP prototype to the LAN/Internet.
-
-In live mode, content leaves the laptop for OpenAI processing. `store=false` does not guarantee zero provider retention; see [official data controls](https://developers.openai.com/api/docs/guides/your-data). The local database is private but is not encrypted by the app. Human review and support arrangements remain necessary; keyword checks are incomplete.
+[STUDY_HOW_TO_USE.md](STUDY_HOW_TO_USE.md), [STUDY_CHANGES.md](STUDY_CHANGES.md), [HANDOVER.md](HANDOVER.md), and older files in `docs/` preserve project history. Old screenshots and instructions showing style names to participants describe earlier versions. Read the guides above for the current software workflow; keep the approved study materials authoritative for research decisions.
