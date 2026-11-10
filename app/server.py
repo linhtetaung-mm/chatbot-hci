@@ -26,6 +26,10 @@ def application(env,start):
         labels={200:'OK',400:'Bad Request',401:'Unauthorized',403:'Forbidden',404:'Not Found',409:'Conflict',410:'Gone',413:'Too Large',429:'Too Many Requests',500:'Internal Error',503:'Unavailable'}
         start(f'{status} {labels.get(status,"Error")}',headers+[('Content-Type',ctype),('Content-Length',str(len(body)))]);return [body]
     try:
+        # Health check answers without the database, so Render can start the new copy while the old one finishes.
+        if env.get('PATH_INFO')=='/health' and env.get('REQUEST_METHOD')=='GET':
+            import os
+            return reply({'ok':True,'mode':bot.cfg['mode'] if bot else os.getenv('CHATBOT_MODE','setup')})
         service=get_bot()
         if service.cfg.get('secure_cookie'):headers.append(('Strict-Transport-Security','max-age=31536000'))
         path=env.get('PATH_INFO','/');method=env.get('REQUEST_METHOD','GET');data={}

@@ -150,3 +150,11 @@ The participant's message now appears the moment they press Send, with an animat
 - **New researcher button** "Add study IDs" (in "Enroll the next participant"): adds 4, 8 or 12 IDs in freshly shuffled blocks of 4, numbered after the last one (P49, P50, ...). Works while the app is live on Render; no laptop tool needed.
 - `tools/assignments.py generate` has `--start` to continue the numbering (e.g. `--start 49`).
 - Checked: deleting a participant removes their account, chats, messages, notes, ratings and logins; their access code stops working; their study ID stays used and is never given out again.
+
+## 16. Several people at once, and the "Another chatbot process" error (11 November)
+
+- **Why the error happens:** only one copy of the app may use a Supabase area (`DATABASE_SCHEMA`) at a time; it holds a database lock. The error appears when a second copy starts on the same area: the app or a `tools/` command on a laptop while Render uses it, or Render's new copy during a deploy while the old copy is still running.
+- **Deploys no longer fail on this:** `/health` answers without the database, the app connects on the first request, and on Render (`DEPLOYMENT=render`) a new copy waits up to 90 s (`DATABASE_LOCK_WAIT`) for the old copy to release the lock. The lock is released explicitly when a copy stops. On a laptop the error still appears at once, which is intended.
+- **More people at once:** 16 request threads (was 8) and up to 12 AI replies at the same moment (`GLOBAL_CONCURRENT_API_LIMIT`, was 5). Each participant can still have only one reply in progress.
+
+Files: `app/postgres.py`, `app/server.py`, `app/config.py`, `app/limits.py`, `gunicorn.conf.py`, `render.supabase.yaml`, `.env.example`.

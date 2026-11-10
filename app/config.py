@@ -59,7 +59,7 @@ def configuration():
             raise ValueError('Render CHATBOT_DB must be inside the persistent disk at /var/data/.')
         if backend=='sqlite' and storage_mode=='persistent' and not Path('/var/data').is_mount():raise ValueError('Attach a Render persistent disk at /var/data before starting.')
     limits={}
-    for name,default in {'TESTER_DAILY_API_LIMIT':80,'GLOBAL_DAILY_API_LIMIT':800,'GLOBAL_TOTAL_API_LIMIT':3000,'TESTER_MINUTE_API_LIMIT':6,'GLOBAL_CONCURRENT_API_LIMIT':5,'TESTER_DAILY_CHAT_LIMIT':6}.items():
+    for name,default in {'TESTER_DAILY_API_LIMIT':80,'GLOBAL_DAILY_API_LIMIT':800,'GLOBAL_TOTAL_API_LIMIT':3000,'TESTER_MINUTE_API_LIMIT':6,'GLOBAL_CONCURRENT_API_LIMIT':12,'TESTER_DAILY_CHAT_LIMIT':6}.items():
         value=int(os.getenv(name,str(default)))
         if value<1:raise ValueError(name+' must be a positive integer.')
         limits[name]=value
@@ -69,6 +69,8 @@ def configuration():
     if not 1<=session_hours<=336:raise ValueError('SESSION_HOURS must be between 1 and 336.')
     min_guided=int(os.getenv('MIN_GUIDED_MESSAGES','6'))
     if not 1<=min_guided<=20:raise ValueError('MIN_GUIDED_MESSAGES must be between 1 and 20.')
+    # Hosted: wait up to 90 s for the previous copy to release the database during a deploy. Local/tools: fail at once.
+    c['database_lock_wait']=float(os.getenv('DATABASE_LOCK_WAIT','90' if hosted else '0'))
     c.update(origin=origin,hosted=hosted,secure_cookie=parsed.scheme=='https',allowed_host=parsed.netloc,limits=limits,session_hours=session_hours,min_guided_messages=min_guided)
     c['api_key_configured']=has_api_key(c['api_key'])
     return c

@@ -112,8 +112,13 @@ class PostgresStorage:
             self._raw=psycopg.connect(self.cfg['database_url'],**connection_options(self.cfg))
             self._raw.execute("SET statement_timeout='20s'")
             self._raw.execute("SET lock_timeout='10s'")
-            locked=self._raw.execute('SELECT pg_try_advisory_lock(%s)',(self.lock_id,)).fetchone()[0]
-            if not locked:raise DatabaseError('Another chatbot process is using this database schema. Stop it before starting this one.')
+            # One app process per schema. During a Render deploy the old copy keeps the lock for a few seconds
+            # until it shuts down, so a hosted app waits for it (DATABASE_LOCK_WAIT) instead of failing at once.
+            import time
+            deadline=time.monotonic()+float(self.cfg.get('database_lock_wait',0) or 0)
+            while not self._raw.execute('SELECT pg_try_advisory_lock(%s)',(self.lock_id,)).fetchone()[0]:
+                if time.monotonic()>=deadline:raise DatabaseError('Another chatbot process is using this database schema. Stop it before starting this one. (Usually the Render app, or the app or a tools/ command on a laptop, is already using this DATABASE_SCHEMA.)')
+                time.sleep(2)
             self._sql=sql
         except ImportError:raise DatabaseError('Install requirements.txt to enable Supabase/PostgreSQL support.') from None
         except Exception as exc:
@@ -132,6 +137,10 @@ class PostgresStorage:
                 # Keep domain errors from the chatbot unchanged; sanitize driver errors only.
                 import psycopg
                 if isinstance(exc,psycopg.Error):
+                    # Log only the error type and SQLSTATE code (no SQL text, data or credentials) to help diagnosis,
+                    # e.g. 42P01 = table missing, 3F000 = schema missing, 42501 = no permission, 42703 = column missing.
+                    import sys
+                    print(f'Database error {type(exc).__name__} sqlstate={getattr(exc,"sqlstate",None)} schema={self.schema}',file=sys.stderr,flush=True)
                     self._raw.close();self._raw=None
                     raise DatabaseError('Database operation failed. No temporary fallback was used. Check connectivity/schema permissions, then retry the original operation.') from None
                 raise
@@ -173,6 +182,10 @@ class PostgresStorage:
                 raise DatabaseError('Database schema/mode/model does not match. Preserve existing data and initialize a different hci_* schema for new mode/model settings.')
     def close(self):
         with self._lock:
-            if self._raw is not None:self._raw.close();self._raw=None
+            if self._raw is not None:
+                # Release the schema lock explicitly so a pooled connection can never keep it.
+                try:self._raw.execute('SELECT pg_advisory_unlock_all()')
+                except Exception:pass
+                self._raw.close();self._raw=None
     def backup(self,destination):
         raise DatabaseError('Use PostgreSQL/Supabase dump and restore tools for this backend; SQLite backup is not supported.')

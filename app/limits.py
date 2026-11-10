@@ -2,7 +2,7 @@
 import hashlib,time
 from contextlib import contextmanager
 from .provider import ProviderError
-DEFAULTS={'TESTER_DAILY_API_LIMIT':80,'GLOBAL_DAILY_API_LIMIT':800,'GLOBAL_TOTAL_API_LIMIT':3000,'TESTER_MINUTE_API_LIMIT':6,'GLOBAL_CONCURRENT_API_LIMIT':5}
+DEFAULTS={'TESTER_DAILY_API_LIMIT':80,'GLOBAL_DAILY_API_LIMIT':800,'GLOBAL_TOTAL_API_LIMIT':3000,'TESTER_MINUTE_API_LIMIT':6,'GLOBAL_CONCURRENT_API_LIMIT':12}
 class UsageLimits:
     def __init__(self,storage,cfg):self.storage=storage;self.limits={**DEFAULTS,**cfg.get('limits',{})}
     @contextmanager

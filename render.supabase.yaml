@@ -56,6 +56,6 @@ services:
       - key: TESTER_MINUTE_API_LIMIT
         value: "6"
       - key: GLOBAL_CONCURRENT_API_LIMIT
-        value: "5"
+        value: "12"
       - key: TESTER_DAILY_CHAT_LIMIT
         value: "6"
