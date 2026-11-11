@@ -67,12 +67,20 @@ def application(env,start):
             set_cookie(service.login(data.get('code',''),data.get('admin') is True));return reply({'ok':True})
         if path=='/api/logout' and method=='POST':service.logout(token);headers.append(('Set-Cookie','chatbot_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+cookie_flags));return reply({'ok':True})
         if path.startswith('/api/admin/'):
-            service.authenticate(token,'admin')
-            if path=='/api/admin/state' and method=='GET':return reply(service.admin_state())
+            researcher=service.authenticate(token)
+            if researcher['role'] not in ('admin','facilitator'):raise Error('Researcher access required.',401)
+            if researcher['role']=='facilitator' and path not in ('/api/admin/state','/api/admin/enroll','/api/admin/reissue'):raise Error('This action requires the study administrator.',403)
+            if path=='/api/admin/state' and method=='GET':return reply(service.admin_state(researcher['role']))
+            if method=='POST':
+                with service.storage.connect() as db:service.event(db,None,None,'researcher_action_attempt',json.dumps({'account':researcher['style'].split(':')[0] if researcher['style'] else 'administrator','role':researcher['role'],'action':path.rsplit('/',1)[-1]}))
+            if path=='/api/admin/materials' and method=='POST':return reply(service.set_study_materials(data))
             if path=='/api/admin/pause' and method=='POST':return reply(service.set_paused(data.get('paused')))
             if path=='/api/admin/assign' and method=='POST':return reply(service.assign(data.get('tester_id',''),data.get('style',''),data.get('memory') or None))
             if path=='/api/admin/create' and method=='POST':return reply(service.create_tester(data.get('style') or 'reassure',data.get('memory') or 'persistent'))
-            if path=='/api/admin/enroll' and method=='POST':return reply(service.enroll())
+            if path=='/api/admin/enrollment_plan' and method=='POST':return reply(service.set_enrollment_plan(data))
+            if path=='/api/admin/enroll' and method=='POST':
+                if data.get('mode')=='manual' and researcher['role']!='admin':raise Error('Manual assignment requires the study administrator.',403)
+                return reply(service.enroll_configured(data.get('mode') or 'random',data.get('setting'),data.get('reason','')))
             if path=='/api/admin/add_ids' and method=='POST':return reply(service.add_study_ids(data.get('count'),data.get('prefix') or 'P'))
             if path=='/api/admin/handoff' and method=='POST':set_cookie(service.handoff(data.get('tester_id',''),data.get('style') or None));return reply({'ok':True})
             if path=='/api/admin/reissue' and method=='POST':
@@ -102,6 +110,9 @@ def application(env,start):
             if action=='finish':return reply(service.finish(auth,cid))
             if action in ('stop','discard'):return reply(service.stop(auth,cid,action=='discard'))
             if action=='invalidate':return reply(service.invalidate(auth,cid,data.get('memory_id',''),data.get('correction','')))
+            if action=='rename':return reply(service.rename(auth,cid,data.get('title','')))
+            if action=='archive_view':return reply(service.archive_view(auth,cid))
+            if action=='correct_detail':return reply(service.correct_detail(auth,cid,data.get('correction','')))
             raise Error('Unknown action.')
         raise Error('Not found.',404)
     except Error as exc:return reply({'error':exc.message},exc.status)

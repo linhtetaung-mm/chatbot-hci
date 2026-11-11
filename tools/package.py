@@ -13,7 +13,7 @@ def public_files():
         if len(rel.parts)==1 and p.name not in {'README.md','HOW_TO_USE.md','STUDY_HOW_TO_USE.md','STUDY_CHANGES.md','HANDOVER.md','VERIFICATION.md','requirements.txt','run.py','setup_local.py','.env.example','.gitignore','MANIFEST.json','render.yaml','render.persistent.yaml','gunicorn.conf.py','DEPLOY_RENDER.md','SUPABASE_SETUP.md','DEPLOY_RENDER_SUPABASE.md','render.supabase.yaml'}:continue
         yield p
 files=[p for p in public_files() if p.name!='MANIFEST.json']
-manifest={'version':'study-clean-workflow-2026-11-11','files':{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
+manifest={'version':'study-experience-redesign-2026-11-11','files':{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
 (ROOT/'MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
 out=ROOT.parent/(ROOT.name+'.zip')
 with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
