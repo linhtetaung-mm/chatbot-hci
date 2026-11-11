@@ -2,7 +2,7 @@
 
 A small research application for the **Reassure/Guide × Persistent/Fresh memory** experiment. Participants see the same neutral **Chatbot** interface and keep one locked condition. Python serves the interface and API; storage can be local SQLite, temporary RAM, or Supabase PostgreSQL.
 
-This cleanup preserves the active prompts, model configuration, assignment rules, questionnaire wording, message limits and visit types. It does not resolve differences between earlier proposals and later study documents. Use the team's approved protocol for recruitment, visit dates, required chats and analysis decisions.
+The redesign branch updates the participant/researcher experience and natural-language prompt instructions. It preserves model configuration, the four fixed conditions, questionnaire wording, message limits and visit types. Administrators now configure setting labels and targets; enrollment creates IDs on demand using randomized blocks by default, with reasoned manual exceptions. Read [the redesign release notes](docs/REDESIGN_RELEASE.md) before piloting or deploying. It does not resolve differences between earlier proposals and later study documents. Use the team's approved protocol for recruitment, visit dates, required chats and analysis decisions.
 
 ## Start here
 
@@ -67,3 +67,5 @@ The suite uses synthetic providers and disposable records. PostgreSQL integratio
 ## Historical material
 
 [STUDY_HOW_TO_USE.md](STUDY_HOW_TO_USE.md), [STUDY_CHANGES.md](STUDY_CHANGES.md), [HANDOVER.md](HANDOVER.md), and older files in `docs/` preserve project history. Old screenshots and instructions showing style names to participants describe earlier versions. Read the guides above for the current software workflow; keep the approved study materials authoritative for research decisions.
+
+For the current branch, follow [the merge and deployment guide](docs/MERGE_AND_DEPLOY_REDESIGN.md). Configure **Allocation** before enrolling after a clean reset.

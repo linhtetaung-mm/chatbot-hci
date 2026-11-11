@@ -90,6 +90,74 @@ class Chatbot:
             db.execute('UPDATE assignments SET tester_id=?,assigned=? WHERE study_id=?',(tid,time.time(),a['study_id']))
             self.event(db,tid,None,'enrolled',a['study_id'])
             return {'id':tid,'study_id':a['study_id'],'code':code,'scenario':a['scenario']}
+    def enrollment_plan(self,db):
+        row=db.execute("SELECT value FROM settings WHERE key='enrollment_plan'").fetchone()
+        return json.loads(row['value']) if row else None
+    def set_enrollment_plan(self,data):
+        groups=data.get('groups')
+        if not isinstance(groups,list) or len(groups)!=4:raise Error('Configure all four support × memory settings for this study.')
+        seen=set();clean=[]
+        for g in groups:
+            if not isinstance(g,dict):raise Error('Each setting needs a label, support style, memory and target.')
+            style=self.style(g.get('style'));memory=g.get('memory');label=g.get('label');target=g.get('target')
+            if memory not in MEMORY or (style,memory) in seen:raise Error('Use each support × memory combination exactly once.')
+            if not isinstance(label,str) or not 1<=len(label.strip())<=80:raise Error('Give each setting a label of 1–80 characters.')
+            scale(target,1,1000,'Each target must be a whole number from 1 to 1,000.')
+            seen.add((style,memory));clean.append({'id':style+':'+memory,'style':style,'memory':memory,'label':label.strip(),'target':target})
+        if len({g['label'].casefold() for g in clean})!=4:raise Error('Use different labels for the four settings.')
+        with self.storage.connect() as db:
+            db.begin_serialized()
+            for g in clean:
+                assigned=db.execute('SELECT count(*) FROM assignments WHERE assigned IS NOT NULL AND style=? AND memory=?',(g['style'],g['memory'])).fetchone()[0]
+                if g['target']<assigned:raise Error('A target cannot be below the number already assigned to that setting.')
+            plan={'groups':clean,'version':digest(json.dumps(clean,sort_keys=True))}
+            db.execute("INSERT INTO settings(key,value) VALUES('enrollment_plan',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(plan),))
+            db.execute("DELETE FROM settings WHERE key='enrollment_queue'")
+            self.event(db,None,None,'enrollment_plan_updated',json.dumps(plan))
+        return {'ok':True}
+    def enroll_configured(self,mode='random',setting=None,reason=''):
+        if self.temporary:raise Error('Enrollment requires persistent storage.',409)
+        if mode not in ('random','manual'):raise Error('Choose randomized or manual assignment.')
+        if mode=='manual' and (not isinstance(reason,str) or not 5<=len(reason.strip())<=1000):raise Error('Record a reason of 5–1,000 characters for manual assignment.')
+        with self.storage.connect() as db:
+            db.begin_serialized();plan=self.enrollment_plan(db)
+            if not plan:raise Error('Ask the administrator to configure the four study settings first.',409)
+            counts={g['id']:db.execute('SELECT count(*) FROM assignments WHERE assigned IS NOT NULL AND style=? AND memory=?',(g['style'],g['memory'])).fetchone()[0] for g in plan['groups']}
+            eligible={g['id']:g for g in plan['groups'] if counts[g['id']]<g['target']}
+            if mode=='manual':
+                if setting not in eligible:raise Error('That setting is unavailable or has reached its target.',409)
+                selected=eligible[setting]
+                db.execute("DELETE FROM settings WHERE key='enrollment_queue'")
+            else:
+                row=db.execute("SELECT value FROM settings WHERE key='enrollment_queue'").fetchone()
+                queue=[key for key in json.loads(row['value']) if key in eligible] if row else []
+                if not queue:
+                    if not eligible:raise Error('All configured enrollment targets have been reached.',409)
+                    rounds=secrets.choice((1,2));queue=[]
+                    for key,g in eligible.items():queue.extend([key]*min(rounds,g['target']-counts[key]))
+                    secrets.SystemRandom().shuffle(queue)
+                selected=eligible[queue.pop(0)]
+                db.execute("INSERT INTO settings(key,value) VALUES('enrollment_queue',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(queue),))
+            rows=db.execute('SELECT study_id,seq FROM assignments').fetchall()
+            number=max([int(r['study_id'][1:]) for r in rows if re.fullmatch(r'P[0-9]+',r['study_id'])]+[0])+1
+            study_id=f'P{number:03d}';seq=max([r['seq'] for r in rows]+[0])+1
+            # Balance scenario exposure within the selected setting without exposing future allocations.
+            scenario='AB'[counts[selected['id']]%2];code=new_code();tid=uid('T');now=time.time()
+            self._insert_tester(db,tid,code,selected['style'],selected['memory'],study_id,True)
+            db.execute('INSERT INTO assignments(study_id,seq,style,memory,scenario,tester_id,assigned) VALUES(?,?,?,?,?,?,?)',(study_id,seq,selected['style'],selected['memory'],scenario,tid,now))
+            self.event(db,tid,None,'enrolled',study_id)
+            self.event(db,tid,None,'assignment_method',json.dumps({'method':mode,'reason':reason.strip() if mode=='manual' else '', 'plan_version':plan['version'],'setting':selected['id']}))
+            return {'id':tid,'study_id':study_id,'code':code,'scenario':scenario}
+    def allocation_report(self,db):
+        plan=self.enrollment_plan(db);labels={g['id']:g for g in plan['groups']} if plan else {}
+        groups=[]
+        for style in STYLES:
+            for memory in MEMORY:
+                key=style+':'+memory;setting=labels.get(key,{})
+                people=[dict(r) for r in db.execute('SELECT id,study_id,consent,suspended FROM testers WHERE locked=1 AND active_style=? AND memory=? ORDER BY study_id',(style,memory))]
+                assigned=db.execute('SELECT count(*) FROM assignments WHERE assigned IS NOT NULL AND style=? AND memory=?',(style,memory)).fetchone()[0]
+                groups.append({'id':key,'label':setting.get('label',style.title()+' × '+memory.title()),'style':style,'memory':memory,'target':setting.get('target'),'assigned_total':assigned,'participants':people,'count':len(people)})
+        return {'groups':groups,'plan':plan}
     def token(self,db,tid,role,style):
         token=secrets.token_urlsafe(32)
         db.execute('INSERT INTO logins VALUES(?,?,?,?,?)',(digest(token),tid,role,style,time.time()+3600*self.cfg.get('session_hours',168)));return token
@@ -107,8 +175,10 @@ class Chatbot:
         if not isinstance(code,str) or len(code)>200:raise Error('Invalid access code.',401)
         with self.storage.connect() as db:
             if admin:
-                if not secrets.compare_digest(code,self.cfg['admin_key']):raise Error('Invalid access code.',401)
-                return self.token(db,None,'admin',None)
+                if secrets.compare_digest(code,self.cfg['admin_key']):return self.token(db,None,'admin',None)
+                for account in self.cfg.get('researcher_accounts',[]):
+                    if secrets.compare_digest(code,account['key']):return self.token(db,None,account['role'],account['name']+':'+digest(account['key'])[:16])
+                raise Error('Invalid access code.',401)
             t=db.execute('SELECT * FROM testers WHERE code_hash=?',(digest(code),)).fetchone() or db.execute('SELECT * FROM testers WHERE code_hash=?',(digest(normalize_code(code)),)).fetchone()
             if not t:raise Error('Invalid access code.',401)
             return self.token(db,t['id'],'tester',t['active_style'])
@@ -125,6 +195,9 @@ class Chatbot:
         with self.storage.connect() as db:
             row=db.execute('SELECT * FROM logins WHERE hash=? AND expires>?',(digest(token),time.time())).fetchone()
             if not row or (role and row['role']!=role):raise Error('Please sign in.',401)
+            if row['role'] in ('admin','facilitator') and row['style']:
+                valid=any(row['role']==a['role'] and row['style']==a['name']+':'+digest(a['key'])[:16] for a in self.cfg.get('researcher_accounts',[]))
+                if not valid:raise Error('Please sign in.',401)
             return dict(row)
     def logout(self,token):
         with self.storage.connect() as db:
@@ -209,7 +282,10 @@ class Chatbot:
             # Same neutral name for every condition; the participant view never shows the assigned style or memory.
             result={'tester_id':t['id'],'study_id':t['study_id'],'participant':participant,'bot_label':'Chatbot','bot_name':'Chatbot','consented':bool(t['consent']),'suspended':bool(t['suspended']),
               'database_backend':self.cfg.get('database_backend','sqlite'),'storage_mode':self.cfg.get('storage_mode','persistent'),'mode':self.cfg['mode'],'api_ready_for_requests':self.cfg['mode']=='live','contact':self.cfg['contact'],'support':self.cfg['support'],'delete_date':self.cfg['delete_date'],
-              'conversations':[] if participant else [dict(r) for r in db.execute('SELECT c.id,c.status,c.started,c.ended,m.status AS memory_status FROM conversations c LEFT JOIN memories m ON c.id=m.conversation_id WHERE tester_id=? AND style=? ORDER BY c.started DESC',(t['id'],auth['style']))]}
+              'conversations':[], 'study_materials':self.study_materials(db)}
+            rows=db.execute('SELECT c.id,c.status,c.started,c.ended,x.chat_type,x.rated FROM conversations c LEFT JOIN chat_meta x ON x.conversation_id=c.id WHERE c.tester_id=? AND c.style=? ORDER BY c.started,c.id',(t['id'],auth['style'])).fetchall()
+            titles={r['conversation_id']:r['detail'] for r in db.execute("SELECT conversation_id,detail FROM events WHERE tester_id=? AND event='conversation_title' ORDER BY id",(t['id'],))}
+            result['conversations']=[dict(r,number=i+1,title=titles.get(r['id'],'')) for i,r in reversed(list(enumerate(rows)))]
             if not participant:result['style']=auth['style']
             open_row=db.execute("SELECT id FROM conversations WHERE tester_id=? AND style=? AND status='open'",(t['id'],auth['style'])).fetchone()
             result['open_conversation']=open_row['id'] if open_row else None
@@ -217,13 +293,61 @@ class Chatbot:
             result['pending_rating']=pending['id'] if pending else None
             if cid:
                 c=self.conversation(db,auth,cid,True);messages=[dict(r) for r in db.execute('SELECT seq,role,text,status,request_id,model FROM messages WHERE conversation_id=? ORDER BY seq',(cid,))]
-                result['conversation']={k:c[k] for k in ['id','status','started']};result['conversation']['older_prompts']=c['prompt_version']!=digest(json.dumps(PROMPTS,sort_keys=True));result['messages']=messages
+                result['conversation']={k:c[k] for k in ['id','status','started','ended']};result['conversation']['older_prompts']=c['prompt_version']!=digest(json.dumps(PROMPTS,sort_keys=True));result['messages']=messages
+                record=next((r for r in result['conversations'] if r['id']==cid),{})
+                result['conversation'].update(number=record.get('number'),title=record.get('title',''))
                 result['memories']=[] if participant else [{'id':n['memory_id'],'completed_at':n['completed_at']} for n in self.selected_notes(db,c)]
                 meta=db.execute('SELECT chat_type FROM chat_meta WHERE conversation_id=?',(cid,)).fetchone()
                 result['conversation']['chat_type']=meta['chat_type'] if meta else None
                 result['min_messages']=self.cfg.get('min_guided_messages',6) if meta and meta['chat_type'] in ('first','final') else 1
                 result['turns']=sum(m['role']=='user' and m['status']=='success' and not m['request_id'].startswith('correction') for m in messages)
             return result
+    def study_materials(self,db):
+        row=db.execute("SELECT value FROM settings WHERE key='study_materials'").fetchone()
+        return json.loads(row['value']) if row else {'instructions':'','baseline_url':'','final_url':''}
+    def set_study_materials(self,data):
+        from urllib.parse import urlsplit
+        material={key:data.get(key,'') for key in ('instructions','baseline_url','final_url')}
+        if any(not isinstance(value,str) for value in material.values()):raise Error('Study materials must be text.')
+        if len(material['instructions'])>3000:raise Error('Keep instructions under 3,000 characters.')
+        for key in ('baseline_url','final_url'):
+            url=material[key].strip();material[key]=url
+            parsed=urlsplit(url)
+            if url and (len(url)>1500 or parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password):raise Error('Questionnaire links must be complete HTTPS URLs without credentials.')
+        with self.storage.connect() as db:
+            db.execute("INSERT INTO settings(key,value) VALUES('study_materials',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(material),))
+            self.event(db,None,None,'study_materials_updated')
+        return {'ok':True}
+    def rename(self,auth,cid,title):
+        if not isinstance(title,str) or len(title.strip())>80:raise Error('Use a title of up to 80 characters.')
+        with self.storage.connect() as db:
+            c=self.conversation(db,auth,cid,True)
+            self.event(db,c['tester_id'],cid,'conversation_title',title.strip())
+        return {'ok':True}
+    def archive_view(self,auth,cid):
+        with self.storage.connect() as db:
+            c=self.conversation(db,auth,cid,True)
+            self.event(db,c['tester_id'],cid,'archive_viewed')
+        return {'ok':True}
+    def correct_detail(self,auth,cid,text):
+        """Same repair affordance in both arms; exclude supplied notes, never rewrite raw history."""
+        if not isinstance(text,str) or not 1<=len(text.strip())<=1000:raise Error('Write the correction in 1–1,000 characters.')
+        mutex=self.lock(cid)
+        if not mutex.acquire(False):raise Error('Wait for the current reply before correcting a detail.',409)
+        try:
+            with self.storage.connect() as db:
+                c=self.conversation(db,auth,cid)
+                if c['status']!='open':raise Error('Corrections can be added to an open conversation.',409)
+                if db.execute("SELECT 1 FROM messages WHERE conversation_id=? AND role='user' AND status!='success'",(cid,)).fetchone():raise Error('Retry the unanswered message first.',409)
+                refs=json.loads(c['memory_refs'])
+                for mid in refs:
+                    db.execute("UPDATE memories SET status='excluded',error='participant_detail_correction' WHERE id=? AND conversation_id IN (SELECT id FROM conversations WHERE tester_id=? AND style=?)",(mid,c['tester_id'],c['style']))
+                # Keep the initial references for exposure/audit; selected_notes excludes invalidated notes.
+                seq=db.execute('SELECT MAX(seq)+1 FROM messages WHERE conversation_id=?',(cid,)).fetchone()[0]
+                db.execute('INSERT INTO messages(conversation_id,seq,role,text,status,request_id,created,flags) VALUES(?,?,?,?,?,?,?,?)',(cid,seq,'user','Correction: '+text.strip(),'success',uid('correction'),time.time(),'memory_correction'))
+                self.event(db,c['tester_id'],cid,'participant_detail_correction',json.dumps({'excluded_refs':refs}))
+        finally:mutex.release()
+        return {'ok':True}
     def send(self,auth,cid,text,request_id):
         if not isinstance(text,str) or not 1<=len(text.strip())<=1500:raise Error('Write a message of 1–1,500 characters.')
         if not isinstance(request_id,str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,100}',request_id):raise Error('Invalid message request ID.')
@@ -386,7 +510,7 @@ class Chatbot:
             db.execute("DELETE FROM logins WHERE tester_id=? AND role='tester'",(tid,))
             self.event(db,tid,None,'remote_style_assigned',style)
         return {'ok':True}
-    def admin_state(self):
+    def admin_state(self,role='admin'):
         with self.storage.connect() as db:
             testers=[]
             finished={}
@@ -395,11 +519,13 @@ class Chatbot:
             for r in db.execute('SELECT id,created,consent,active_style,suspended,study_id,memory,locked FROM testers ORDER BY created').fetchall():
                 row=dict(r)
                 row['finished_chats']={k:finished.get(row['id'],{}).get(k,0) for k in CHAT_TYPES}
-                if row['locked']:row.pop('active_style');row.pop('memory')  # condition stays concealed on screen; it is in the export
+                if row['locked'] or role=='facilitator':row.pop('active_style');row.pop('memory')
                 testers.append(row)
             unused=db.execute('SELECT count(*) FROM assignments WHERE assigned IS NULL').fetchone()[0]
-            return {'database_backend':self.cfg.get('database_backend','sqlite'),'storage_mode':self.cfg.get('storage_mode','persistent'),'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'usage':self.usage.state(),'unused_study_ids':unused,'testers':testers,
-              'conversations':[dict(r) for r in db.execute('SELECT c.id,c.tester_id,c.style,c.status,c.started,c.prompt_version,m.status AS memory_status FROM conversations c LEFT JOIN memories m ON m.conversation_id=c.id ORDER BY c.started DESC')]}
+            conversations=[dict(r) for r in db.execute('SELECT c.id,c.tester_id,c.style,c.status,c.started,c.ended,c.prompt_version,m.status AS memory_status,x.chat_type,x.rated FROM conversations c LEFT JOIN memories m ON m.conversation_id=c.id LEFT JOIN chat_meta x ON x.conversation_id=c.id ORDER BY c.started DESC')]
+            if role=='facilitator':
+                for row in conversations:row.pop('style');row.pop('prompt_version')
+            return {'role':role,'database_backend':self.cfg.get('database_backend','sqlite'),'storage_mode':self.cfg.get('storage_mode','persistent'),'mode':self.cfg['mode'],'model':self.cfg['model'],'api_key_configured':self.cfg.get('api_key_configured',False),'usage':self.usage.state(),'unused_study_ids':unused,'testers':testers,'study_materials':self.study_materials(db),'conversations':conversations,'enrollment_ready':bool(self.enrollment_plan(db)),**({'allocation':self.allocation_report(db)} if role=='admin' else {})}
     def inspect(self,cid):
         with self.storage.connect() as db:
             c=db.execute('SELECT * FROM conversations WHERE id=?',(cid,)).fetchone()

@@ -58,9 +58,13 @@ async function consent(page) {
   for (const input of await page.locator("#consent input").all())
     await input.check();
   await page.locator("#consent button").click();
-  await page.locator("#start").waitFor();
+  await page.locator("#begin-start, #start").first().waitFor();
 }
 async function beginChat(page) {
+  await page.locator("#begin-start, #start, #resume-chat").first().waitFor();
+  if (await page.locator("#resume-chat").count()) { await page.locator("#resume-chat").click(); await page.locator("#text").waitFor(); return; }
+  if (await page.locator("#begin-start").count()) await page.locator("#begin-start").click();
+  await page.locator("#pre_distress-number").fill("50");
   await page.locator("#start button").click();
   await page.locator("#text").waitFor();
 }
@@ -115,13 +119,25 @@ async function screenshot(page, file) {
       await fit(page, `${width}: consent`);
       await consent(page);
     }
+    await screenshot(page, `home-${width}.png`);
+    await page.locator('[data-view="help"]').click();
+    await fit(page, `${width}: help`);
+    await page.locator('[data-view="study"]').click();
+    await fit(page, `${width}: study activities`);
+    await page.locator('[data-view="home"]').click();
     await beginChat(page);
     await send(page, "I had a rough day because of a small deadline.");
+    await page.locator("#pause-chat").click();
+    await page.reload();
+    await page.locator("#resume-chat").click();
+    await page.locator("#text").waitFor();
+    assert.equal(await page.locator(".message.user").count(),1);
     await fit(page, `${width}: chat`);
     await screenshot(page, `chat-${width}.png`);
     await page.locator("#finish").click();
     await page.locator("#rate").waitFor();
     await fit(page, `${width}: ratings`);
+    await page.locator("#post_distress-number").fill("50");
     // All seven choices stay aligned and visible; endpoints are unchanged.
     const tops = await page
       .locator("input[name=support_needed]")
@@ -162,19 +178,55 @@ async function screenshot(page, file) {
     }
     await page.locator("#rate button").click();
     await page.locator(".saved").waitFor();
+    await page.locator('[data-view="chats"]').click();
+    await page.locator("[data-chat]").first().click();
+    await page.locator("#back-home").waitFor();
+    assert.equal(await page.locator("#send").count(), 0);
+    await fit(page, `${width}: archive`);
+    await page.locator("#rename-chat").click();
+    await page.locator("#title-editor input").fill("My saved conversation");
+    await page.locator("#title-editor button").click();
+    await page.getByRole("heading", {name:"My saved conversation",exact:true}).waitFor();
     await page.locator("#logout").click();
     await page.goto(`${config.origin}/admin`);
     await page.locator("#login").waitFor();
     await login(page, config.admin);
+    await page.locator('[data-admin-page="participants"]').click();
     await page.locator("#enroll").waitFor();
     for (const details of await page.locator("details").all())
       await details.evaluate((el) => {
         el.open = true;
       });
+    for (const pane of ["overview","allocation","sessions","quality","exports","settings","participants"]) {
+      await page.locator(`[data-admin-page="${pane}"]`).click();
+      await fit(page, `${width}: researcher ${pane}`);
+      await screenshot(page, `${pane}-${width}.png`);
+    }
     await fit(page, `${width}: researcher`);
     await screenshot(page, `researcher-${width}.png`);
     if (width === 1440) {
+      await page.locator('[data-admin-page="allocation"]').click();
+      await page.locator('[name="label-0"]').fill("Comfort + continuity");
+      await page.locator("#allocation-plan button").click();
+      await page.locator("#app[aria-busy=false]").waitFor();
+      await page.locator('[data-setting-filter="reassure:persistent"]').click();
+      assert.equal(await page.locator("#allocation-members tr").count(),3);
+      assert.ok((await page.locator("#allocation-members").innerText()).includes("Comfort + continuity"));
+      await page.locator('[data-admin-page="participants"]').click();
+      await page.locator("#assignment-method").selectOption("manual");
+      await page.locator('[name="setting"]').selectOption("guide:fresh");
+      await page.locator('[name="reason"]').fill("Synthetic pilot browser validation");
+      await page.locator("#enroll").click();
+      await page.locator("#app[aria-busy=false]").waitFor();
+      assert.ok((await page.locator("#invitation").innerText()).includes("Study ID: P011"));
+      await page.locator('[data-admin-page="allocation"]').click();
+      await page.locator('[data-setting-filter="guide:fresh"]').click();
+      assert.equal(await page.locator("#allocation-members tr").count(),2);
+      await screenshot(page, "allocation-configured-1440.png");
+      records.push("Settings: rename, persist, filter membership, manual enroll, chart count updates");
+      await page.locator('[data-admin-page="participants"]').click();
       // Recover an unused test account without creating another enrollment.
+      await page.getByText("Replace a lost access code", {exact:true}).click();
       await page.locator("#reissue select").selectOption({ index: 3 });
       await page.locator("#reissue input").fill("REPLACE CODE");
       await page.locator("#reissue button").click();
@@ -282,6 +334,7 @@ async function screenshot(page, file) {
   await reconnect.locator("#reconnect").waitFor();
   await reconnect.unroute("**/api/state*");
   await reconnect.locator("#reconnect").click();
+  await reconnect.locator("#resume-chat").click();
   await reconnect.locator("#text").waitFor();
   records.push("Recovery: initial API failure and reconnect");
   // Stop stays available while a reply is delayed, and its late response cannot reopen the chat.
@@ -291,8 +344,9 @@ async function screenshot(page, file) {
   await held;
   assert.ok(await page.locator("#stop").isEnabled());
   page.once("dialog", (dialog) => dialog.accept());
+  await page.locator(".conversation-options summary").click();
   await page.locator("#stop").click();
-  await page.locator("#start").waitFor();
+  await page.locator("#begin-start, #start").first().waitFor();
   releaseHold();
   await page.locator("#app[aria-busy=false]").waitFor();
   assert.equal(await page.locator("#text").count(), 0);
@@ -301,6 +355,20 @@ async function screenshot(page, file) {
   );
 
   await context.close();
+  const limited = await browser.newContext({viewport:{width:390,height:844}});
+  const facilitator = await limited.newPage();
+  facilitator.on("pageerror", error=>errors.push(error.message));
+  await facilitator.goto(config.origin + "/admin");
+  await login(facilitator, config.facilitator);
+  await facilitator.locator('[data-admin-page="participants"]').waitFor();
+  assert.equal(await facilitator.locator('[data-admin-page="exports"]').isVisible(), false);
+  assert.equal(await facilitator.locator('[data-admin-page="settings"]').isVisible(), false);
+  assert.equal(await facilitator.locator('[data-admin-page="allocation"]').isVisible(), false);
+  await facilitator.locator('[data-admin-page="sessions"]').click();
+  assert.equal(await facilitator.locator(".inspect").count(), 0);
+  assert.equal((await limited.request.get(config.origin + "/api/admin/export")).status(),403);
+  await fit(facilitator,"Facilitator: restricted navigation, metadata only, raw export denied");
+  await limited.close();
   assert.deepEqual(errors, [], "Browser JavaScript errors");
   console.log(
     `PASS: ${records.length} browser checks; ${engine}; widths 320, 390, 768, 1440; no JavaScript errors.`,

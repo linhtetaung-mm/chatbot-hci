@@ -58,7 +58,7 @@ class StudyTests(unittest.TestCase):
         self.chat(a,'home',1)
     def test_participant_view_is_neutral(self):
         e,a=self.participant();self.chat(a);cid=self.bot.start(a,'home',30)['id'];s=self.bot.state(a,cid)
-        self.assertEqual(s['bot_name'],'Chatbot');self.assertNotIn('style',s);self.assertEqual(s['memories'],[]);self.assertEqual(s['conversations'],[])
+        self.assertEqual(s['bot_name'],'Chatbot');self.assertNotIn('style',s);self.assertEqual(s['memories'],[]);self.assertEqual(len(s['conversations']),2)
         self.assertNotIn('guide',json.dumps(s).lower());self.assertNotIn('reassure',json.dumps(s).lower())
         admin=self.bot.admin_state();row=[t for t in admin['testers'] if t['id']==e['id']][0];self.assertNotIn('memory',row);self.assertNotIn('active_style',row)
     def test_short_codes_are_forgiving(self):
@@ -141,4 +141,129 @@ class StudyTests(unittest.TestCase):
         second=[dict(r,study_id='Q'+r['study_id'][1:]) for r in assignment_rows()]
         self.assertEqual(self.bot.load_assignments(second),4)
         with self.assertRaises(Error):self.bot.add_study_ids(5)
+class ConfiguredEnrollmentTests(unittest.TestCase):
+    setUp=StudyTests.setUp
+    tearDown=StudyTests.tearDown
+    def plan(self,target=4):
+        return {'groups':[{'style':s,'memory':m,'label':s+' '+m,'target':target} for s in ('reassure','guide') for m in ('persistent','fresh')]}
+    def test_no_predefined_records_needed_and_target_caps_hold(self):
+        with self.bot.storage.connect() as db:db.execute('DELETE FROM assignments')
+        with self.assertRaises(Error):self.bot.enroll_configured()
+        self.bot.set_enrollment_plan(self.plan())
+        people=[self.bot.enroll_configured() for _ in range(16)]
+        self.assertEqual(len({p['study_id'] for p in people}),16)
+        groups=self.bot.admin_state()['allocation']['groups']
+        self.assertEqual([g['count'] for g in groups],[4]*4)
+        with self.assertRaises(Error):self.bot.enroll_configured()
+        self.bot.delete(people[0]['id'])
+        with self.assertRaises(Error):self.bot.enroll_configured()
+        self.assertEqual(sum(g['assigned_total'] for g in self.bot.admin_state()['allocation']['groups']),16)
+    def test_manual_assignment_is_locked_and_audited(self):
+        self.bot.set_enrollment_plan(self.plan())
+        with self.assertRaises(Error):self.bot.enroll_configured('manual','guide:fresh','')
+        e=self.bot.enroll_configured('manual','guide:fresh','Synthetic pilot example')
+        with self.assertRaises(Error):self.bot.assign(e['id'],'reassure')
+        with self.bot.storage.connect() as db:
+            row=db.execute("SELECT detail FROM events WHERE tester_id=? AND event='assignment_method'",(e['id'],)).fetchone()
+        self.assertEqual(json.loads(row[0])['method'],'manual')
+        self.assertNotIn('allocation',self.bot.admin_state('facilitator'))
+    def test_plan_cannot_redefine_factors_or_shrink_below_issued(self):
+        plan=self.plan();self.bot.set_enrollment_plan(plan)
+        self.bot.enroll_configured('manual','guide:fresh','Synthetic pilot example')
+        self.bot.enroll_configured('manual','guide:fresh','Synthetic pilot example')
+        smaller=self.plan(1)
+        with self.assertRaises(Error):self.bot.set_enrollment_plan(smaller)
+        invalid=self.plan();invalid['groups'][0]['style']='new_style'
+        with self.assertRaises(Error):self.bot.set_enrollment_plan(invalid)
+    def test_concurrent_enrollment_uses_unique_ids(self):
+        import threading
+        self.bot.set_enrollment_plan(self.plan())
+        results=[];errors=[]
+        def enroll():
+            try:results.append(self.bot.enroll_configured())
+            except Exception as exc:errors.append(exc)
+        threads=[threading.Thread(target=enroll) for _ in range(8)]
+        for t in threads:t.start()
+        for t in threads:t.join()
+        self.assertEqual(errors,[]);self.assertEqual(len({r['study_id'] for r in results}),8)
+
+class ExperienceTests(unittest.TestCase):
+    setUp=StudyTests.setUp
+    tearDown=StudyTests.tearDown
+    participant=StudyTests.participant
+    chat=StudyTests.chat
+    def test_facilitator_permissions_are_enforced_by_server(self):
+        from app import server
+        from unittest.mock import patch
+        from urllib.parse import urlsplit
+        account={'name':'facilitator_one','role':'facilitator','key':'TEST-ONLY-FACILITATOR-KEY-123456'}
+        self.bot.cfg['researcher_accounts']=[account]
+        _,a=self.participant();self.chat(a)
+        self.bot.set_enrollment_plan({'groups':[{'style':s,'memory':m,'label':s+' '+m,'target':12} for s in ('reassure','guide') for m in ('persistent','fresh')]})
+        token=self.bot.login(account['key'],True)
+        def request(path,method='GET',data=None):
+            raw=json.dumps(data or {}).encode();result={}
+            env={'PATH_INFO':path,'REQUEST_METHOD':method,'HTTP_HOST':urlsplit(self.cfg['origin']).netloc,'HTTP_ORIGIN':self.cfg['origin'],'HTTP_X_CHATBOT_REQUEST':'1','HTTP_COOKIE':'chatbot_session='+token,'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(raw)),'wsgi.input':io.BytesIO(raw)}
+            def start(status,headers):result['status']=int(status.split()[0])
+            with patch.object(server,'bot',self.bot):result['body']=json.loads(b''.join(server.application(env,start)))
+            return result
+        response=request('/api/admin/state');self.assertEqual(response['status'],200)
+        self.assertEqual(response['body']['role'],'facilitator')
+        self.assertNotIn('style',response['body']['conversations'][0])
+        self.assertNotIn('prompt_version',response['body']['conversations'][0])
+        self.assertNotIn(account['key'],json.dumps(response))
+        for path,method in [('export','GET'),('export_chats','GET'),('inspect','POST'),('pause','POST'),('delete','POST'),('materials','POST'),('handoff','POST')]:
+            self.assertEqual(request('/api/admin/'+path,method)['status'],403,path)
+        self.assertEqual(request('/api/admin/enroll','POST')['status'],200)
+        self.bot.cfg['researcher_accounts']=[]
+        self.assertEqual(request('/api/admin/state')['status'],401)
+    def test_named_admin_rotation_revokes_existing_session(self):
+        account={'name':'coordinator','role':'admin','key':'TEST-ONLY-COORDINATOR-KEY-123456'}
+        self.bot.cfg['researcher_accounts']=[account]
+        token=self.bot.login(account['key'],True)
+        self.assertEqual(self.bot.authenticate(token,'admin')['role'],'admin')
+        account['key']='ROTATED-TEST-COORDINATOR-KEY-123456'
+        with self.assertRaises(Error):self.bot.authenticate(token,'admin')
+    def test_materials_are_shared_persistent_and_urls_are_safe(self):
+        _,a=self.participant()
+        for value in ['javascript:alert(1)','http://example.com','https://user:password@example.com']:
+            with self.assertRaises(Error):self.bot.set_study_materials({'baseline_url':value})
+        data={'instructions':'Use your scheduled visit links.','baseline_url':'https://example.com/baseline','final_url':''}
+        self.bot.set_study_materials(data)
+        self.assertEqual(self.bot.state(a)['study_materials'],data)
+        self.assertEqual(Chatbot(self.cfg,self.p).admin_state()['study_materials'],data)
+    def test_archive_is_owned_neutral_and_read_only(self):
+        _,a=self.participant();cid=self.chat(a);_,other=self.participant()
+        history=self.bot.state(a)['conversations']
+        self.assertEqual(history[0]['id'],cid)
+        self.assertEqual(history[0]['number'],1)
+        self.assertNotIn('style',history[0]);self.assertNotIn('memory_status',history[0])
+        with self.assertRaises(Error):self.bot.archive_view(other,cid)
+        with self.assertRaises(Error):self.bot.rename(other,cid,'Other person')
+        self.bot.archive_view(a,cid)
+        self.assertEqual(self.bot.state(a,cid)['conversation']['status'],'completed')
+        with self.assertRaises(Error):self.bot.send(a,cid,'Cannot append',str(uuid.uuid4()))
+    def test_title_survives_restart_and_stays_out_of_model_context(self):
+        _,a=self.participant();cid=self.bot.start(a,'home',30)['id']
+        self.bot.rename(a,cid,'Private title')
+        other=Chatbot(self.cfg,self.p)
+        self.assertEqual(other.state(a,cid)['conversation']['title'],'Private title')
+        self.bot.send(a,cid,'Hello',str(uuid.uuid4()))
+        self.assertNotIn('Private title',json.dumps(self.p.calls[-1]))
+        self.bot.rename(a,cid,'')
+        self.assertEqual(self.bot.state(a,cid)['conversation']['title'],'')
+    def test_correction_preserves_factors_and_does_not_count_as_exposure(self):
+        _,fresh=self.participant();_,persistent=self.participant()
+        for a in (fresh,persistent):
+            self.chat(a);cid=self.bot.start(a,'home',30)['id']
+            self.bot.correct_detail(a,cid,'That was a different person.')
+            self.assertEqual(self.bot.state(a,cid)['turns'],0)
+            self.bot.send(a,cid,'Thanks',str(uuid.uuid4()))
+            self.assertEqual(self.p.calls[-1]['notes'],[])
+            self.assertIn('Correction:',json.dumps(self.p.calls[-1]['history']))
+    def test_correction_cannot_target_another_person_or_finished_chat(self):
+        _,a=self.participant();cid=self.chat(a);_,other=self.participant()
+        with self.assertRaises(Error):self.bot.correct_detail(other,cid,'Wrong')
+        with self.assertRaises(Error):self.bot.correct_detail(a,cid,'Wrong')
+        with self.assertRaises(Error):self.bot.rename(a,cid,'x'*81)
 if __name__=='__main__':unittest.main()

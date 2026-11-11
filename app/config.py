@@ -72,5 +72,16 @@ def configuration():
     # Hosted: wait up to 90 s for the previous copy to release the database during a deploy. Local/tools: fail at once.
     c['database_lock_wait']=float(os.getenv('DATABASE_LOCK_WAIT','90' if hosted else '0'))
     c.update(origin=origin,hosted=hosted,secure_cookie=parsed.scheme=='https',allowed_host=parsed.netloc,limits=limits,session_hours=session_hours,min_guided_messages=min_guided)
+    import json
+    try:accounts=json.loads(os.getenv('RESEARCHER_ACCOUNTS_JSON','[]'))
+    except ValueError:raise ValueError('RESEARCHER_ACCOUNTS_JSON must be a JSON list.')
+    if not isinstance(accounts,list):raise ValueError('Researcher accounts must be a list.')
+    names=set();keys={key}
+    for account in accounts:
+        if not isinstance(account,dict) or set(account)!={'name','role','key'}:raise ValueError('Each researcher account needs name, role and key.')
+        if not isinstance(account['name'],str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}',account['name']) or account['name'] in names:raise ValueError('Use unique short researcher account names.')
+        if account['role'] not in ('admin','facilitator') or not isinstance(account['key'],str) or len(account['key'])<24 or account['key'] in keys:raise ValueError('Use an admin/facilitator role and a unique researcher key of at least 24 characters.')
+        names.add(account['name']);keys.add(account['key'])
+    c['researcher_accounts']=accounts
     c['api_key_configured']=has_api_key(c['api_key'])
     return c
